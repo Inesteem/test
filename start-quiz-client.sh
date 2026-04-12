@@ -6,17 +6,14 @@ export XDG_RUNTIME_DIR=/run/user/1000
 export WAYLAND_DISPLAY=wayland-0
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
-GM_HOST="${GM_HOST:-DEPLOY_GM_HOST}"
-GM_PORT="${GM_PORT:-9000}"
 CLIENT_PORT="${CLIENT_PORT:-7777}"
 
 # Start team client if not already running
+# No --game-master: the browser config screen handles it
 if ! pgrep -f "team_client.py" > /dev/null 2>&1; then
     cd "$APP_DIR"
     ~/buzzer/venv/bin/python3 team_client.py \
-        --game-master "${GM_HOST}:${GM_PORT}" \
         --port "$CLIENT_PORT" \
-        --leds \
         > client.log 2>&1 &
     echo $! > client.pid
     sleep 1
