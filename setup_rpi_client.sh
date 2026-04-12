@@ -32,7 +32,7 @@ if [ -z "$GM_HOST" ]; then
 fi
 
 echo ">> Creating directory structure on RPi..."
-ssh "$RPI" 'mkdir -p ~/buzzer/leds'
+ssh "$RPI" 'mkdir -p ~/buzzer/leds ~/buzzer/static'
 
 echo ">> Copying buzzer server files..."
 scp -q buzzers/buzzer.py buzzers/buzzer_server.py "$RPI:buzzer/"
@@ -40,6 +40,7 @@ scp -q buzzers/buzzer.py buzzers/buzzer_server.py "$RPI:buzzer/"
 echo ">> Copying team client files..."
 scp -q team_client.py "$RPI:buzzer/"
 scp -q leds/__init__.py leds/stub.py leds/klopfklopf.py "$RPI:buzzer/leds/"
+scp -q static/simple-keyboard.min.js static/simple-keyboard.css static/keyboard.js "$RPI:buzzer/static/"
 
 echo ">> Stopping old processes..."
 ssh "$RPI" '

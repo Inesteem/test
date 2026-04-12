@@ -14,6 +14,7 @@ If a KlopfKlopf USB LED strip is attached, pass --leds to enable LED effects.
 import argparse
 import json
 import logging
+import os
 import re
 import socket
 import sys
@@ -132,7 +133,20 @@ HTML_PAGE = (
   #btn-c { background: #2ecc71; }
   #timer { text-align: center; padding: 10px; font-size: 1.5em; }
   #scores { text-align: center; padding: 10px; font-size: 0.9em; color: #888; }
+
+  /* On-screen keyboard */
+  .kbd { position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
+         transition: transform 0.2s ease; }
+  .kbd.hidden { transform: translateY(100%); }
+  body.kbd-open #setup { padding-bottom: 240px; }
+  .quiz-kbd.hg-theme-default.hg-layout-default { background: #111; border-top: 1px solid #333; padding: 6px; }
+  .quiz-kbd.hg-theme-default .hg-button { background: #333; color: #e0e0e0;
+    border-bottom: 1px solid #222; border-radius: 5px; height: 38px; font-weight: 600; }
+  .quiz-kbd.hg-theme-default .hg-button:active,
+  .quiz-kbd.hg-theme-default .hg-button.hg-activeButton { background: #e74c3c; color: #fff; }
+  .quiz-kbd.hg-theme-default .hg-button.hg-functionBtn { background: #444; color: #e0e0e0; }
 </style>
+<link rel="stylesheet" href="/static/simple-keyboard.css">
 </head>
 <body>
 
@@ -433,6 +447,13 @@ function showNewGameBtn() {
 
 initSetup();
 </script>
+
+<!-- On-screen keyboard for kiosk/touchscreen -->
+<div id="keyboard" class="kbd hidden">
+  <div class="simple-keyboard"></div>
+</div>
+<script src="/static/simple-keyboard.min.js"></script>
+<script src="/static/keyboard.js"></script>
 </body>
 </html>"""
 )
@@ -443,6 +464,8 @@ class TeamClientHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/" or self.path.startswith("/?"):
             self._send(200, HTML_PAGE, "text/html")
+        elif self.path.startswith("/static/"):
+            self._serve_static(self.path[8:])  # strip "/static/"
         elif self.path == "/answer":
             with _answer_lock:
                 body = json.dumps({"answer": _current_answer})
@@ -568,6 +591,25 @@ class TeamClientHandler(BaseHTTPRequestHandler):
             self._send_bytes(200, data, "application/json")
         except (urllib.error.URLError, OSError):
             self._send(503, '{"error":"game master unreachable"}', "application/json")
+
+    def _serve_static(self, filename):
+        """Serve files from the static/ directory next to this script."""
+        # Only allow known safe filenames
+        allowed = {"simple-keyboard.min.js", "simple-keyboard.css", "keyboard.js"}
+        if filename not in allowed:
+            self._send(404, '{"error":"not found"}', "application/json")
+            return
+        content_types = {".js": "application/javascript", ".css": "text/css"}
+        ext = os.path.splitext(filename)[1]
+        ct = content_types.get(ext, "application/octet-stream")
+        static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+        filepath = os.path.join(static_dir, filename)
+        try:
+            with open(filepath, "rb") as f:
+                data = f.read()
+            self._send_bytes(200, data, ct)
+        except FileNotFoundError:
+            self._send(404, '{"error":"not found"}', "application/json")
 
     def _send(self, status, body, content_type):
         raw = body.encode() if isinstance(body, str) else body
