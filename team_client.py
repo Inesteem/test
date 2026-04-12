@@ -384,7 +384,7 @@ function showWaiting() {
 
 function resetToSetup() {
   myBuzzerNum = null;
-  fetch('/new_game', {method:'POST'}).then(() => { location.reload(); });
+  fetch('/new_game', {method:'POST'}).finally(() => { location.reload(); });
 }
 
 function quitApp() {
@@ -398,10 +398,11 @@ function quitApp() {
 
 function answer(ch) {
   if (!isMyTurn || myAnswer) return;
+  isMyTurn = false;  // lock out further taps immediately
   myAnswer = ch;
   fetch('/submit', {method:'POST', headers:{'Content-Type':'application/json'},
                      body: JSON.stringify({answer: ch})});
-  document.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
   document.getElementById('btn-' + ch).classList.add('selected');
 }
 
@@ -422,8 +423,9 @@ function updateUI(state) {
   // Fetch our registration slot number
   const regNum = document.getElementById('team-num').textContent;
 
-  // After buzzer assignment, resolve our actual buzzer number
-  if (!myBuzzerNum && state.buzzer_map && state.buzzer_map[regNum]) {
+  // After buzzer assignment, resolve our actual buzzer number.
+  // Always re-check (no !myBuzzerNum guard) so a late-arriving map is picked up.
+  if (state.buzzer_map && state.buzzer_map[regNum] != null) {
     myBuzzerNum = String(state.buzzer_map[regNum]);
   }
   const teamNum = myBuzzerNum || regNum;
@@ -477,10 +479,11 @@ function updateUI(state) {
         document.getElementById('btn-c').textContent = 'C) ' + (state.choices.c || '');
       }
     } else if (state.phase === 'buzzer_assign') {
-        const isMe = state.assign_team && String(state.assign_team) === teamNum;
-        // Check if we've already been assigned
+        // Use regNum (not teamNum) here — assign_team and assigned_teams
+        // are keyed by registration slot, not buzzer number.
+        const isMe = state.assign_team && String(state.assign_team) === regNum;
         const done = state.assigned_teams || {};
-        const amDone = done[teamNum];
+        const amDone = done[regNum];
         if (amDone) {
             status.textContent = '\u2713 Buzzer assigned!';
             status.style.background = '#2ecc71';
@@ -546,11 +549,11 @@ setInterval(async () => {
     }
   } catch(e) { gmFailCount++; }
   // Game master gone (server shut down) — offer reset
-  if (gmFailCount > 6 && gameStarted && !gameOverShown) {
+  if (gmFailCount > 10 && gameStarted && !gameOverShown) {
     gameOverShown = true;
     showNewGameBtn();
   }
-}, 500);
+}, 200);
 
 function showNewGameBtn() {
   const btn = document.createElement('button');
@@ -584,8 +587,10 @@ class TeamClientHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/static/"):
             self._serve_static(self.path[8:])  # strip "/static/"
         elif self.path == "/answer":
+            global _current_answer
             with _answer_lock:
                 body = json.dumps({"answer": _current_answer})
+                _current_answer = None  # clear after read to prevent stale bleed
             self._send(200, body, "application/json")
         elif self.path == "/client_info":
             with _team_config_lock:
@@ -846,7 +851,10 @@ class ClientLEDRunner(threading.Thread):
             return
 
         phase = state.get("phase", "idle")
-        team_key = str(self._team_num)
+        # Resolve registration slot → physical buzzer via buzzer_map
+        buzzer_map = state.get("buzzer_map", {})
+        resolved = buzzer_map.get(str(self._team_num))
+        team_key = str(resolved) if resolved is not None else str(self._team_num)
 
         # Track phase transitions
         if phase != self._last_phase:

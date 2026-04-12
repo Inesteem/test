@@ -47,6 +47,7 @@ def show_feedback(display, leds, snd, correct, name, team_config, buzzer_num,
             feedback_team=name,
             feedback_team_num=buzzer_num,
             feedback_correct=correct,
+            question_text=question_text,
             time_remaining=None,
         )
 

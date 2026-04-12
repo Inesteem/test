@@ -165,6 +165,7 @@ def main():
         game_state.update(
             teams={str(k): v for k, v in team_config.items()},
             scores={str(k): 0 for k in team_config},
+            buzzer_map={str(slot): bz for slot, bz in buzzer_map.items()},
         )
 
         # Ready screen

@@ -307,6 +307,7 @@ class CursesDisplay:
         if timeout == 0:
             self._win.nodelay(True)
             key = self._win.getch()
+            self._win.nodelay(False)
             if key == -1:
                 return None
             return self._key_to_command(key)
@@ -318,8 +319,10 @@ class CursesDisplay:
                 if key != -1:
                     cmd = self._key_to_command(key)
                     if cmd is not None:
+                        self._win.nodelay(False)
                         return cmd
                 time.sleep(0.05)
+            self._win.nodelay(False)
             return None
 
     def wait_for_key(self):
