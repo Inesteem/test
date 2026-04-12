@@ -1,0 +1,47 @@
+{
+  "name": "Default Roast",
+  "correct_fast": [
+    "Even a broken clock is right twice a day.",
+    "Wow, you CAN read! Impressive.",
+    "Did someone whisper the answer?",
+    "Finally. Was that so hard?",
+    "Your parents must be so relieved.",
+    "A monkey with a buzzer could do that.",
+    "Don't let it go to your head.",
+    "Okay, ONE lucky guess."
+  ],
+  "correct_slow": [
+    "Took you long enough.",
+    "Congrats on the world's slowest correct answer.",
+    "Did you have to Google it first?",
+    "My grandmother would've been faster.",
+    "The suspense was killing... nobody.",
+    "We were about to move on without you."
+  ],
+  "wrong": [
+    "That was confidently incorrect.",
+    "Bold strategy. Wrong, but bold.",
+    "Did you even read the question?",
+    "Have you considered a career change?",
+    "That answer hurt my feelings.",
+    "I've seen better guesses from a random number generator.",
+    "Your team owes the audience an apology.",
+    "Google would've known that. Oh wait..."
+  ],
+  "timeout": [
+    "Hello? Anyone home?",
+    "We'll just wait here. Forever.",
+    "Analysis paralysis at its finest.",
+    "You had ONE job. And a buzzer.",
+    "Riveting performance.",
+    "This is the engineering talent Google hired?"
+  ],
+  "nobody": [
+    "Absolutely pathetic. All of you.",
+    "The question wasn't THAT hard.",
+    "An entire room of engineers. Zero correct answers.",
+    "This is going in the postmortem.",
+    "I'm not angry, just disappointed.",
+    "Maybe try a coloring book next time."
+  ]
+}

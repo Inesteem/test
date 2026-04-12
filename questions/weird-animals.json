@@ -1,0 +1,152 @@
+[
+  {
+    "question": "How many hearts does an octopus have?",
+    "choices": ["1", "2", "3"],
+    "answer": 2,
+    "difficulty": 3
+  },
+  {
+    "question": "What animal is physically incapable of vomiting?",
+    "choices": ["Horse", "Rat", "Cat"],
+    "answer": 1,
+    "difficulty": 4
+  },
+  {
+    "question": "A group of flamingos is called a what?",
+    "choices": ["A flamboyance", "A parade", "A bouquet"],
+    "answer": 0,
+    "difficulty": 5
+  },
+  {
+    "question": "Which animal sleeps standing up but can only dream lying down?",
+    "choices": ["Cow", "Horse", "Elephant"],
+    "answer": 1,
+    "difficulty": 4
+  },
+  {
+    "question": "What color is a hippo's sweat?",
+    "choices": ["Clear", "Yellow", "Red"],
+    "answer": 2,
+    "difficulty": 5
+  },
+  {
+    "question": "Which creature has the highest blood pressure of any animal?",
+    "choices": ["Blue whale", "Giraffe", "Elephant"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "How long can a snail sleep without waking up?",
+    "choices": ["3 weeks", "6 months", "3 years"],
+    "answer": 2,
+    "difficulty": 6
+  },
+  {
+    "question": "What animal has fingerprints nearly identical to humans?",
+    "choices": ["Chimpanzee", "Koala", "Gorilla"],
+    "answer": 1,
+    "difficulty": 7
+  },
+  {
+    "question": "The tongue of a blue whale weighs roughly as much as what?",
+    "choices": ["A grand piano", "An elephant", "A school bus"],
+    "answer": 1,
+    "difficulty": 5
+  },
+  {
+    "question": "Which sea creature has a brain shaped like a donut, with its esophagus running through the hole?",
+    "choices": ["Octopus", "Lobster", "Sea urchin"],
+    "answer": 1,
+    "difficulty": 7
+  },
+  {
+    "question": "What animal can hold its breath the longest?",
+    "choices": ["Sperm whale", "Cuvier's beaked whale", "Leatherback sea turtle"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "Which bird can fly backwards?",
+    "choices": ["Kingfisher", "Hummingbird", "Swift"],
+    "answer": 1,
+    "difficulty": 2
+  },
+  {
+    "question": "A shrimp's heart is located in its what?",
+    "choices": ["Tail", "Head", "Abdomen"],
+    "answer": 1,
+    "difficulty": 5
+  },
+  {
+    "question": "What percentage of a cat's bones are in its tail?",
+    "choices": ["About 2%", "About 10%", "About 20%"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "Which animal produces cube-shaped poop?",
+    "choices": ["Capybara", "Wombat", "Pangolin"],
+    "answer": 1,
+    "difficulty": 3
+  },
+  {
+    "question": "What is a rhinoceros horn made of?",
+    "choices": ["Bone", "Ivory", "Keratin"],
+    "answer": 2,
+    "difficulty": 5
+  },
+  {
+    "question": "How many noses does a slug have?",
+    "choices": ["2", "4", "0"],
+    "answer": 1,
+    "difficulty": 7
+  },
+  {
+    "question": "The mantis shrimp can punch with the force of a what?",
+    "choices": [".22 caliber bullet", "Baseball bat", "Car crash at 5 mph"],
+    "answer": 0,
+    "difficulty": 6
+  },
+  {
+    "question": "Which animal's milk is naturally pink?",
+    "choices": ["Flamingo", "Hippo", "Yak"],
+    "answer": 1,
+    "difficulty": 8
+  },
+  {
+    "question": "What is a baby puffin called?",
+    "choices": ["A puffling", "A chick", "A puff"],
+    "answer": 0,
+    "difficulty": 4
+  },
+  {
+    "question": "Which animal has been shown to recognize itself in a mirror?",
+    "choices": ["Pig", "Cleaner wrasse fish", "Both"],
+    "answer": 2,
+    "difficulty": 8
+  },
+  {
+    "question": "What is the only mammal that can truly fly?",
+    "choices": ["Flying squirrel", "Bat", "Colugo"],
+    "answer": 1,
+    "difficulty": 2
+  },
+  {
+    "question": "An axolotl can regenerate which of the following?",
+    "choices": ["Its heart", "Its brain", "Both"],
+    "answer": 2,
+    "difficulty": 7
+  },
+  {
+    "question": "The pistol shrimp stuns prey by creating what with its claw snap?",
+    "choices": ["An electric shock", "A bubble hotter than the sun's surface", "A sonic boom audible to humans"],
+    "answer": 1,
+    "difficulty": 8
+  },
+  {
+    "question": "Which animal has the longest migration of any creature on Earth?",
+    "choices": ["Monarch butterfly", "Arctic tern", "Humpback whale"],
+    "answer": 1,
+    "difficulty": 9
+  }
+]

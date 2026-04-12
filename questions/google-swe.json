@@ -1,0 +1,152 @@
+[
+  {
+    "question": "How many valid states can a single byte hold?",
+    "choices": ["128", "255", "256"],
+    "answer": 2,
+    "difficulty": 3
+  },
+  {
+    "question": "What does the 'S' in HTTPS stand for?",
+    "choices": ["Safe", "Secure", "Socket"],
+    "answer": 1,
+    "difficulty": 2
+  },
+  {
+    "question": "Google's original name was...?",
+    "choices": ["BackRub", "PageSearch", "WebCrawler"],
+    "answer": 0,
+    "difficulty": 5
+  },
+  {
+    "question": "Which Google product was famously launched on April 1, 2004?",
+    "choices": ["Google Maps", "Gmail", "Google Earth"],
+    "answer": 1,
+    "difficulty": 4
+  },
+  {
+    "question": "What is a 'heisenbug'?",
+    "choices": ["A bug that only appears in production", "A bug that disappears when you try to debug it", "A bug caused by quantum computing errors"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "In Big-O notation, what is the time complexity of looking up a key in a balanced BST?",
+    "choices": ["O(1)", "O(log n)", "O(n)"],
+    "answer": 1,
+    "difficulty": 3
+  },
+  {
+    "question": "Which language was Go (golang) designed to replace at Google?",
+    "choices": ["Java", "C++", "Python"],
+    "answer": 1,
+    "difficulty": 5
+  },
+  {
+    "question": "What does the 'B' in B-tree stand for?",
+    "choices": ["Binary", "Balanced", "Nobody knows for sure"],
+    "answer": 2,
+    "difficulty": 8
+  },
+  {
+    "question": "In Python, what does 'import antigravity' actually do?",
+    "choices": ["Raises an ImportError", "Opens an xkcd comic in your browser", "Prints 'I believe I can fly'"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "What is the maximum number of comparisons needed to find an element in a sorted array of 1 million items using binary search?",
+    "choices": ["About 20", "About 100", "About 1000"],
+    "answer": 0,
+    "difficulty": 7
+  },
+  {
+    "question": "What was the original storage capacity of the first Google server, built from LEGO?",
+    "choices": ["4 GB across 10 hard drives", "40 GB across 10 hard drives", "400 GB across 10 hard drives"],
+    "answer": 1,
+    "difficulty": 7
+  },
+  {
+    "question": "Which of these is NOT a real HTTP status code?",
+    "choices": ["418 I'm a Teapot", "420 Enhance Your Calm", "423 Quota Exceeded"],
+    "answer": 2,
+    "difficulty": 7
+  },
+  {
+    "question": "NP-hard means...",
+    "choices": ["No Polynomial solution exists", "At least as hard as the hardest problems in NP", "The problem cannot be solved by any computer"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "Google's internal code review tool is called...",
+    "choices": ["Gerrit", "Critique", "Piper"],
+    "answer": 1,
+    "difficulty": 4
+  },
+  {
+    "question": "What happens if you type 'do a barrel roll' into Google Search?",
+    "choices": ["Nothing — they removed it in 2020", "The page rotates 360 degrees", "A barrel emoji appears"],
+    "answer": 1,
+    "difficulty": 3
+  },
+  {
+    "question": "What is the worst-case time complexity of quicksort?",
+    "choices": ["O(n log n)", "O(n\u00b2)", "O(n)"],
+    "answer": 1,
+    "difficulty": 5
+  },
+  {
+    "question": "In the movie 'The Social Network', what was Eduardo Saverin's algorithm written on?",
+    "choices": ["A napkin", "A dorm room window", "A whiteboard"],
+    "answer": 1,
+    "difficulty": 7
+  },
+  {
+    "question": "The 'Dining Philosophers Problem' was originally formulated by...",
+    "choices": ["Alan Turing", "Edsger Dijkstra", "Donald Knuth"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "What is Google's internal monorepo system called?",
+    "choices": ["Piper", "Borg", "Colossus"],
+    "answer": 0,
+    "difficulty": 5
+  },
+  {
+    "question": "In Google's SRE culture, what does a 'postmortem' specifically require?",
+    "choices": ["Assigning blame to the responsible engineer", "A blameless analysis of what went wrong", "Filing a bug with P0 severity"],
+    "answer": 1,
+    "difficulty": 4
+  },
+  {
+    "question": "The Googleplex vs googolplex distinction is...",
+    "choices": ["There is no confusion — Googleplex is just the HQ name", "The HQ is 'Googleplex', the number is 'googolplex'", "They are actually the same word"],
+    "answer": 1,
+    "difficulty": 5
+  },
+  {
+    "question": "Which tech CEO once said 'I think there is a world market for maybe five computers'?",
+    "choices": ["Thomas Watson (IBM chairman)", "Bill Gates", "Nobody actually said this — it is a misattribution"],
+    "answer": 2,
+    "difficulty": 9
+  },
+  {
+    "question": "In JavaScript, what does '[] + []' evaluate to?",
+    "choices": ["0", "An empty string", "NaN"],
+    "answer": 1,
+    "difficulty": 8
+  },
+  {
+    "question": "Which of these was a REAL Google April Fools' prank?",
+    "choices": ["Google Nose (smell search)", "Google Underwater (subaquatic data centers)", "Google Telepathy (think-to-search)"],
+    "answer": 0,
+    "difficulty": 6
+  },
+  {
+    "question": "Which Google internal tool shares its name with a common abbreviation?",
+    "choices": ["Blender", "Mop", "Moma"],
+    "answer": 2,
+    "difficulty": 8
+  }
+]

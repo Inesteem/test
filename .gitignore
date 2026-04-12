@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+quiz.log
+.coverage
+htmlcov/
+.team_ips.json

@@ -1,0 +1,26 @@
+[
+  {
+    "question": "What color is the sky on a clear day?",
+    "choices": ["Green", "Blue", "Purple"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "How many legs does a cat have?",
+    "choices": ["4", "6", "8"],
+    "answer": 0,
+    "difficulty": 1
+  },
+  {
+    "question": "What is 2 + 2?",
+    "choices": ["3", "5", "4"],
+    "answer": 2,
+    "difficulty": 1
+  },
+  {
+    "question": "According to the famous legend, which fruit supposedly fell on Isaac Newton's head and inspired his theory of universal gravitation while he was sitting under a tree in Woolsthorpe Manor?",
+    "choices": ["A pear", "An apple", "A coconut"],
+    "answer": 1,
+    "difficulty": 10
+  }
+]

@@ -1,0 +1,41 @@
+{
+  "name": "Gordon Ramsay",
+  "correct_fast": [
+    "Oh, you finally found the lamb sauce.",
+    "Even a donkey gets it right sometimes.",
+    "That's the first competent thing you've done all night.",
+    "Don't celebrate, you barely scraped by.",
+    "One correct answer doesn't make you a chef. I mean, engineer."
+  ],
+  "correct_slow": [
+    "My risotto would've been cold by now.",
+    "Did you fall asleep on the buzzer?",
+    "That answer was RAW. But technically correct.",
+    "You call that speed? Pathetic.",
+    "I've seen glaciers move faster."
+  ],
+  "wrong": [
+    "It's WRONG! Get out!",
+    "This is a DISASTER!",
+    "You absolute donut.",
+    "My gran could answer better. And she's dead.",
+    "WHERE IS THE CORRECT ANSWER?!",
+    "That answer is so undercooked, it's still mooing.",
+    "You're an idiot sandwich.",
+    "Disgusting. Absolutely disgusting."
+  ],
+  "timeout": [
+    "This kitchen is CLOSED!",
+    "Standing there like a stunned mullet.",
+    "MOVE YOUR HANDS! THINK!",
+    "You're useless. Completely useless.",
+    "I've had enough. GET OUT."
+  ],
+  "nobody": [
+    "SHUT IT DOWN! Everyone out!",
+    "This is the worst team I've ever seen.",
+    "You should all be ashamed of yourselves.",
+    "I wouldn't trust you lot to boil water.",
+    "Right. That's it. I'm done."
+  ]
+}

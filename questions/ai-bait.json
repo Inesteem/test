@@ -1,0 +1,62 @@
+[
+  {
+    "question": "What is 1 + 1?",
+    "choices": ["11", "2", "Window"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "Which planet do we live on?",
+    "choices": ["Mars", "Earth", "The Moon"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "How many fingers does a typical human hand have?",
+    "choices": ["5", "6", "It depends on the sprint"],
+    "answer": 0,
+    "difficulty": 1
+  },
+  {
+    "question": "What sound does a cow make?",
+    "choices": ["Woof", "Moo", "Segfault"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "Which of these is a fruit?",
+    "choices": ["Banana", "Kubernetes", "TCP/IP"],
+    "answer": 0,
+    "difficulty": 1
+  },
+  {
+    "question": "What color is a red fire truck?",
+    "choices": ["Blue", "Red", "It's an implementation detail"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "How many sides does a triangle have?",
+    "choices": ["3", "4", "Depends on the abstraction layer"],
+    "answer": 0,
+    "difficulty": 1
+  },
+  {
+    "question": "What do you call frozen water?",
+    "choices": ["Steam", "Ice", "A deployment freeze"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "Which animal is known as man's best friend?",
+    "choices": ["Cat", "Dog", "Stack Overflow"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "What year comes after 2025?",
+    "choices": ["2024", "2026", "Time is a social construct"],
+    "answer": 1,
+    "difficulty": 2
+  }
+]

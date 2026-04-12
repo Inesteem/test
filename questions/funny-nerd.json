@@ -1,0 +1,152 @@
+[
+  {
+    "question": "What does the B in B-tree stand for?",
+    "choices": ["Binary", "Balanced", "Nobody knows for sure"],
+    "answer": 2,
+    "difficulty": 6
+  },
+  {
+    "question": "In Star Wars, who shot first in the original 1977 theatrical release?",
+    "choices": ["Han", "Greedo", "They shot at the same time"],
+    "answer": 0,
+    "difficulty": 3
+  },
+  {
+    "question": "What was the first message ever sent over the internet (ARPANET)?",
+    "choices": ["Hello", "Login", "Lo"],
+    "answer": 2,
+    "difficulty": 7
+  },
+  {
+    "question": "How many people mass-unsubscribed from World of Warcraft after the 'Corrupted Blood' plague incident?",
+    "choices": ["Thousands", "Millions", "It was actually studied by the CDC"],
+    "answer": 2,
+    "difficulty": 5
+  },
+  {
+    "question": "What is the answer to the ultimate question of life, the universe, and everything?",
+    "choices": ["42", "69", "Pi"],
+    "answer": 0,
+    "difficulty": 1
+  },
+  {
+    "question": "Which programming language was mass-renamed to avoid confusion with Java?",
+    "choices": ["JavaScript", "LiveScript", "Mocha"],
+    "answer": 1,
+    "difficulty": 7
+  },
+  {
+    "question": "The HTTP status code 418 means what?",
+    "choices": ["Forbidden Brew", "I'm a teapot", "Coffee Not Found"],
+    "answer": 1,
+    "difficulty": 3
+  },
+  {
+    "question": "What is the airspeed velocity of an unladen swallow?",
+    "choices": ["24 mph", "11 m/s", "African or European?"],
+    "answer": 2,
+    "difficulty": 2
+  },
+  {
+    "question": "What does the 'S' in HTTPS stand for?",
+    "choices": ["Safe", "Secure", "SSL"],
+    "answer": 1,
+    "difficulty": 2
+  },
+  {
+    "question": "Which sci-fi franchise has more total on-screen deaths?",
+    "choices": ["Star Wars", "Star Trek", "Lord of the Rings"],
+    "answer": 0,
+    "difficulty": 5
+  },
+  {
+    "question": "The original name for Google was what?",
+    "choices": ["BackRub", "PageRank", "Googol"],
+    "answer": 0,
+    "difficulty": 6
+  },
+  {
+    "question": "How long was the first ever YouTube video?",
+    "choices": ["18 seconds", "59 seconds", "3 minutes 22 seconds"],
+    "answer": 0,
+    "difficulty": 6
+  },
+  {
+    "question": "In D&D, what happens if you roll a natural 1?",
+    "choices": ["Critical hit", "Critical fail", "Reroll"],
+    "answer": 1,
+    "difficulty": 2
+  },
+  {
+    "question": "Which key combination is known as the 'three-finger salute'?",
+    "choices": ["Alt+F4", "Ctrl+Alt+Delete", "Ctrl+C"],
+    "answer": 1,
+    "difficulty": 3
+  },
+  {
+    "question": "The word 'wiki' in Wikipedia comes from which language?",
+    "choices": ["Japanese", "Hawaiian", "Finnish"],
+    "answer": 1,
+    "difficulty": 5
+  },
+  {
+    "question": "What was stored on the very first hard drive sold by IBM in 1956?",
+    "choices": ["5 MB", "1 MB", "10 MB"],
+    "answer": 0,
+    "difficulty": 7
+  },
+  {
+    "question": "Which company originally developed the GIF format?",
+    "choices": ["Adobe", "CompuServe", "Netscape"],
+    "answer": 1,
+    "difficulty": 6
+  },
+  {
+    "question": "In the Matrix, what color pill does Neo take?",
+    "choices": ["Blue", "Red", "Both"],
+    "answer": 1,
+    "difficulty": 1
+  },
+  {
+    "question": "Bobby Tables is a reference to which type of attack?",
+    "choices": ["XSS", "SQL injection", "Buffer overflow"],
+    "answer": 1,
+    "difficulty": 3
+  },
+  {
+    "question": "How do you pronounce 'GIF' according to its creator?",
+    "choices": ["Hard G like 'gift'", "Soft G like 'jif'", "He never clarified"],
+    "answer": 1,
+    "difficulty": 4
+  },
+  {
+    "question": "What is the most mass-downvoted comment in Reddit history about?",
+    "choices": ["EA defending loot boxes", "A Rick Astley AMA answer", "An admin banning a subreddit"],
+    "answer": 0,
+    "difficulty": 5
+  },
+  {
+    "question": "Linus Torvalds named Linux after himself. What did he name Git after?",
+    "choices": ["A British slang insult", "His cat", "An acronym for Global Information Tracker"],
+    "answer": 0,
+    "difficulty": 7
+  },
+  {
+    "question": "In the original Pac-Man, what causes the kill screen at level 256?",
+    "choices": ["A timer overflow", "An integer overflow", "A rendering bug"],
+    "answer": 1,
+    "difficulty": 8
+  },
+  {
+    "question": "How many lines of code was the Apollo 11 guidance software?",
+    "choices": ["About 15,000", "About 145,000", "About 2 million"],
+    "answer": 1,
+    "difficulty": 8
+  },
+  {
+    "question": "What year did the last known Blockbuster Video store close... just kidding, is it still open?",
+    "choices": ["It closed in 2019", "There's still one in Bend, Oregon", "There are actually three left"],
+    "answer": 1,
+    "difficulty": 9
+  }
+]
