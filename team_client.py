@@ -152,6 +152,13 @@ HTML_PAGE = (
   .quiz-kbd.hg-theme-default .hg-button.hg-activeButton { background: #e74c3c; color: #fff; }
   .quiz-kbd.hg-theme-default .hg-button.hg-functionBtn { background: #444; color: #e0e0e0; }
 
+  /* Persistent quit button */
+  #quit-btn { position: fixed; top: 8px; right: 8px; z-index: 9999;
+              width: 32px; height: 32px; border-radius: 50%; border: none;
+              background: rgba(255,255,255,0.08); color: #555; font-size: 16px;
+              cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  #quit-btn:active { background: #e74c3c; color: #fff; }
+
   /* Config phase */
   #config { display: flex; flex-direction: column; align-items: center;
             justify-content: center; padding: 20px; height: 100vh; }
@@ -165,6 +172,7 @@ HTML_PAGE = (
 <link rel="stylesheet" href="/static/simple-keyboard.css">
 </head>
 <body>
+<button id="quit-btn" onclick="quitApp()">&times;</button>
 
 <!-- Config phase -->
 <div id="config">
