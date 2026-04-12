@@ -1,83 +1,144 @@
-# Raspberry Pi Buzzer Server Setup
+# Raspberry Pi Setup
 
-The buzzer server runs on a Raspberry Pi, detecting USB buzzer presses and exposing them over HTTP as JSON for the quiz to poll.
+The RPi serves as both **buzzer host** (physical USB buzzers) and optionally a **team client** (with LED strip and touchscreen kiosk browser).
 
-Default RPi: `10.0.0.1` (configurable via env var or settings UI).
+## Quick Start
+
+From the project root on your laptop, run:
+
+```bash
+BUZZER_RPI_HOST=<rpi-ip> ./setup_rpi_client.sh
+```
+
+This single script handles everything:
+- Creates venv and installs Python packages (evdev, pyusb) if missing
+- Sets up udev rules for buzzers and LED strip (one-time, needs sudo)
+- Copies all code to the RPi
+- Starts the buzzer server and team client
+- Installs a desktop icon for kiosk mode
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `BUZZER_RPI_HOST` | `10.0.0.1` | RPi IP address |
+| `BUZZER_RPI_PORT` | `8888` | Buzzer server port |
+| `RPI_CLIENT_PORT` | `7777` | Team client port |
+| `RPI_USER` | `$(whoami)` | SSH username |
+
+### Example
+
+```bash
+BUZZER_RPI_HOST=10.0.0.1 ./setup_rpi_client.sh
+```
 
 ## What's on the RPi
 
 ```
 ~/buzzer/
-  buzzer.py          # buzzer detection logic (evdev)
-  buzzer_server.py   # HTTP server wrapping buzzer logic
-  venv/              # Python venv with evdev installed
-  server.log         # stdout/stderr from last server run
-  server.pid         # PID of running server (used by setup_rpi.sh)
+  buzzer.py            # buzzer detection (evdev)
+  buzzer_server.py     # HTTP server for buzzer state
+  team_client.py       # team client HTTP server + web UI
+  start-quiz-client.sh # desktop icon launcher
+  QuizBuzzer.desktop   # desktop entry template
+  venv/                # Python venv (evdev, pyusb)
+  leds/                # LED controller library
+  static/              # keyboard JS/CSS, app icon
+  client.log           # team client log
+  buzzer_server.log    # buzzer server log
 ```
 
-## How it was set up
+## Prerequisites
 
-1. SSH access as `user@10.0.0.1` (key-based auth)
-2. Created `~/buzzer/` and a Python venv inside it:
-   ```
-   mkdir -p ~/buzzer
-   python3 -m venv ~/buzzer/venv
-   ~/buzzer/venv/bin/pip install evdev
-   ```
-3. Copied `buzzer.py` and `buzzer_server.py` to `~/buzzer/`
-4. RPi has Python 3.13.5, runs Debian (PEP 668 managed, hence the venv)
-5. Two buzzers are connected and detected without any udev rules (the RPi user already has input device access)
+- Raspberry Pi OS (Bookworm or later) with desktop environment
+- Python 3.10+
+- SSH access (key-based recommended)
+- USB buzzers and/or LED strip plugged in
+- Chromium browser (for kiosk mode)
 
-## Starting the server after reboot
+## Udev Rules
 
-The server does not auto-start. Run the setup script from the project root:
+The setup script installs these automatically (needs sudo once):
+
+| Device | Rule File | Vendor:Product |
+|--------|-----------|----------------|
+| USB Buzzers | `/etc/udev/rules.d/99-buzzer.rules` | `2341:c036` |
+| LED Strip | `/etc/udev/rules.d/99-klopfklopf.rules` | `18d1:5035` |
+
+To install manually:
+```bash
+# On the RPi:
+sudo bash -c 'echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"2341\", ATTR{idProduct}==\"c036\", MODE=\"0666\", GROUP=\"plugdev\"" > /etc/udev/rules.d/99-buzzer.rules'
+sudo bash -c 'echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"18d1\", ATTR{idProduct}==\"5035\", MODE=\"0666\", GROUP=\"plugdev\"" > /etc/udev/rules.d/99-klopfklopf.rules'
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+## Desktop Icon (Kiosk Mode)
+
+The setup script installs a `QuizBuzzer` desktop icon. Tapping it:
+
+1. Starts the team client (if not running)
+2. Launches Chromium in kiosk mode (fullscreen, no address bar)
+3. Shows the config screen where you enter the game master IP
+
+Chromium flags used:
+```
+--ozone-platform=wayland --enable-wayland-ime
+--kiosk --noerrdialogs --disable-infobars --no-first-run
+--enable-touch-events
+--disk-cache-size=1 --aggressive-cache-discard
+```
+
+## On-Screen Keyboard
+
+The team client embeds [simple-keyboard](https://virtual-keyboard.js.org/) for touchscreen input. It activates automatically when a text/number input is focused. No system keyboard configuration needed.
+
+## Buzzer-Only Mode
+
+If you only need the buzzer server (no team client or kiosk):
 
 ```bash
-./setup_rpi.sh
+BUZZER_RPI_HOST=10.0.0.1 ./setup_rpi.sh
 ```
 
-To use a different RPi address or port:
+This copies only `buzzer.py` and `buzzer_server.py` and starts the server.
+
+## Endpoints
+
+### Buzzer Server (port 8888)
+
+| Method | Path | Response |
+|--------|------|----------|
+| GET | `/` | `{"buzzers": [1, 2], "ranking": [2, 1]}` |
+| POST | `/reset` | `{"ok": true}` |
+
+### Team Client (port 7777)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/` | Web UI (setup + game) |
+| GET | `/client_info` | Team number, config state |
+| GET | `/answer` | Current answer (polled by master) |
+| POST | `/connect` | Set game master (from browser config) |
+| POST | `/team_config` | Submit name+color (forwarded to master) |
+| POST | `/quit` | Stop app + close kiosk browser |
+| POST | `/new_game` | Reset for new game |
+
+## Optional: Auto-Start on Boot
+
+Create a systemd service:
 
 ```bash
-BUZZER_RPI_HOST=10.0.0.50 BUZZER_RPI_PORT=9000 ./setup_rpi.sh
-```
-
-Output looks like:
-
-```
->> Copying latest buzzer files to RPi...
->> Stopping old server (if any)...
->> Starting buzzer server on RPi...
->> Verifying from local machine...
-   {"buzzers": [1, 2], "ranking": []}
->> Done. Buzzer server is running.
-```
-
-## Configuration
-
-The RPi address and port can be set in three ways (highest priority first):
-
-1. **Settings UI** — edit host/port fields in the in-game settings screen at startup
-2. **Environment variables** — `BUZZER_RPI_HOST` and `BUZZER_RPI_PORT`
-3. **Defaults** — `10.0.0.1:8888`
-
-Both `setup_rpi.sh` and the quiz UI respect these env vars.
-
-## Optional: auto-start on boot via systemd
-
-To make the server survive reboots without running `setup_rpi.sh`, create a systemd unit:
-
-```bash
-sudo tee /etc/systemd/system/buzzer-server.service > /dev/null << 'EOF'
+sudo tee /etc/systemd/system/quiz-buzzer.service > /dev/null << 'EOF'
 [Unit]
-Description=Buzzer HTTP Server
+Description=Quiz Buzzer Server
 After=network.target
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/buzzer
-ExecStart=/home/pi/buzzer/venv/bin/python3 buzzer_server.py --host 0.0.0.0 --port 8888
+WorkingDirectory=$HOME/buzzer
+ExecStart=$HOME/buzzer/venv/bin/python3 buzzer_server.py --host 0.0.0.0 --port 8888
 Restart=on-failure
 RestartSec=3
 
@@ -86,31 +147,15 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable buzzer-server
-sudo systemctl start buzzer-server
+sudo systemctl enable --now quiz-buzzer
 ```
 
-## Endpoints
-
-| Method | Path     | Response                                      |
-|--------|----------|-----------------------------------------------|
-| GET    | `/`      | `{"buzzers": [1, 2], "ranking": [2, 1]}`     |
-| POST   | `/reset` | `{"ok": true}`                                |
-
-## Local dependencies (macOS)
-
-The quiz machine needs these installed via Homebrew:
-
-- `libusb` — USB backend for pyusb (LED controller)
-- `sox` — audio synthesis for sound effects
+## Logs
 
 ```bash
-brew install libusb sox
-```
+# Buzzer server
+ssh user@<rpi-ip> 'tail -f ~/buzzer/buzzer_server.log'
 
-Python deps are in the local venv (`./venv`):
-
-```bash
-python3 -m venv venv
-venv/bin/pip install pyusb
+# Team client
+ssh user@<rpi-ip> 'tail -f ~/buzzer/client.log'
 ```
