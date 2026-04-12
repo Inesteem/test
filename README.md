@@ -52,6 +52,21 @@ venv/bin/pip install pyusb
 
 On Linux, use `apt install libusb-1.0-0 sox` and `pip install pyusb`.
 
+### LED strip (optional)
+
+The RGB LED light show is optional — the game runs fine without it and will log a warning if no LED controller is detected.
+
+If you do have the KlopfKlopf LED strip (`18d1:5035`) and want to use it:
+
+- **macOS**: works out of the box with `brew install libusb`.
+- **Linux**: raw USB devices are root-only by default. Run the udev setup script once to grant user-level access:
+
+  ```bash
+  ./leds/setup_udev.sh
+  ```
+
+  This writes a single rule to `/etc/udev/rules.d/` that makes *only* the LED controller device (vendor `18d1`, product `5035`) accessible without sudo. No other devices are affected. See the script itself for a full explanation of what it does and why. After running it, unplug and replug the LED strip.
+
 ### 3. Run the game
 
 ```bash
