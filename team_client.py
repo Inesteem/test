@@ -77,6 +77,11 @@ _preview_color = None  # hex color string during setup color selection
 _game_master_url = ""
 _team_num = None  # set via --team
 
+_config_lock = threading.Lock()
+_client_config = None  # set by POST /connect: {game_master_url, leds}
+_config_event = threading.Event()  # signaled when config is submitted
+_server_port = 7777  # set in main(); readable by handler
+
 
 # ── HTML pages ──
 
@@ -146,13 +151,39 @@ HTML_PAGE = (
   .quiz-kbd.hg-theme-default .hg-button:active,
   .quiz-kbd.hg-theme-default .hg-button.hg-activeButton { background: #e74c3c; color: #fff; }
   .quiz-kbd.hg-theme-default .hg-button.hg-functionBtn { background: #444; color: #e0e0e0; }
+
+  /* Config phase */
+  #config { display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 20px; height: 100vh; }
+  #config h1 { margin-bottom: 20px; font-size: 1.5em; }
+  #config .field { width: 100%; max-width: 360px; margin-bottom: 15px; }
+  #config .field label { display: block; color: #888; margin-bottom: 5px; font-size: 0.9em; }
+  #config .field input { font-size: 1.1em; padding: 12px; border-radius: 10px; border: 2px solid #333;
+                         background: #16213e; color: #fff; width: 100%; text-align: center; }
+  #config-status { margin-top: 10px; color: #888; font-size: 0.9em; }
 </style>
 <link rel="stylesheet" href="/static/simple-keyboard.css">
 </head>
 <body>
 
+<!-- Config phase -->
+<div id="config">
+  <h1>Quiz Client Setup</h1>
+  <div class="field">
+    <label>Game Master IP:Port</label>
+    <input type="text" id="gm-input" placeholder="10.0.0.2:9000">
+  </div>
+  <div class="field">
+    <label>Client Port</label>
+    <input type="number" id="port-input" value="7777">
+  </div>
+  <div id="config-status"></div>
+  <button id="connect-btn" style="font-size:1.3em;padding:15px 40px;border-radius:14px;border:none;background:#2ecc71;color:#fff;font-weight:bold;cursor:pointer;margin-top:10px;" onclick="submitConnect()">CONNECT</button>
+  <div style="margin-top:30px;"><a href="#" onclick="quitApp()" style="color:#666;font-size:0.8em;text-decoration:none;">Quit App</a></div>
+</div>
+
 <!-- Setup phase -->
-<div id="setup">
+<div id="setup" style="display:none">
   <h1>Team <span id="team-num">?</span></h1>
   <div class="subtitle">Pick your color &amp; name</div>
   <div id="color-grid"></div>
@@ -185,17 +216,59 @@ let myAnswer = null;
 let isMyTurn = false;
 let gameStarted = false;
 
+// ── Config phase ──
+
+function submitConnect() {
+    const gm = document.getElementById('gm-input').value.trim();
+    if (!gm) return;
+    const btn = document.getElementById('connect-btn');
+    btn.textContent = 'Connecting...';
+    btn.style.opacity = '0.4';
+    document.getElementById('config-status').textContent = 'Registering with game master...';
+
+    fetch('/connect', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({game_master: gm})
+    }).then(r => r.json()).then(data => {
+        if (data.ok) {
+            // Hide config, show setup
+            document.getElementById('config').style.display = 'none';
+            document.getElementById('setup').style.display = 'flex';
+            document.getElementById('team-num').textContent = data.team_num;
+            document.getElementById('name-input').value = 'Team ' + data.team_num;
+        } else {
+            document.getElementById('config-status').textContent = data.error || 'Connection failed';
+            btn.textContent = 'CONNECT';
+            btn.style.opacity = '1';
+        }
+    }).catch(() => {
+        document.getElementById('config-status').textContent = 'Connection failed \u2014 check the address';
+        btn.textContent = 'CONNECT';
+        btn.style.opacity = '1';
+    });
+}
+
 // ── Setup phase ──
 
 function initSetup() {
-  // Fetch client info (team number)
+  // Fetch client info (team number + config state)
   fetch('/client_info').then(r => r.json()).then(info => {
-    document.getElementById('team-num').textContent = info.team_num || '?';
-    document.getElementById('name-input').value = info.default_name || '';
-    // Check if already configured
-    if (info.config) {
-      configSubmitted = true;
-      showWaiting();
+    if (info.config_done) {
+      // Already connected — go straight to setup
+      document.getElementById('config').style.display = 'none';
+      document.getElementById('setup').style.display = 'flex';
+      document.getElementById('team-num').textContent = info.team_num || '?';
+      document.getElementById('name-input').value = info.default_name || '';
+      if (info.config) {
+        configSubmitted = true;
+        showWaiting();
+      }
+    } else {
+      // Show config screen, hide setup
+      document.getElementById('config').style.display = 'flex';
+      document.getElementById('setup').style.display = 'none';
+      document.getElementById('port-input').value = info.port || '7777';
     }
   });
 
@@ -278,11 +351,13 @@ function submitConfig() {
       alert('That color was just taken! Pick another.');
       return;
     }
-    if (!r.ok) throw new Error('submit failed');
+    if (!r.ok) return r.json().then(d => {
+      alert(d.error || 'Submit failed — is the game master running?');
+    });
     configSubmitted = true;
     showWaiting();
   }).catch(() => {
-    alert('Failed to submit — try again');
+    alert('Cannot reach game master — is the quiz running?');
   });
 }
 
@@ -296,6 +371,14 @@ function showWaiting() {
 
 function resetToSetup() {
   fetch('/new_game', {method:'POST'}).then(() => { location.reload(); });
+}
+
+function quitApp() {
+  if (confirm('Quit the app?')) {
+    fetch('/quit', {method:'POST'}).then(() => {
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#666;font-size:1.5em;">App stopped.</div>';
+    });
+  }
 }
 
 // ── Game phase ──
@@ -478,6 +561,8 @@ class TeamClientHandler(BaseHTTPRequestHandler):
                 "team_num": _team_num,
                 "default_name": f"Team {_team_num}" if _team_num else "",
                 "config": cfg,
+                "config_done": bool(_game_master_url and _team_num),
+                "port": _server_port,
             })
             self._send(200, body, "application/json")
         elif self.path == "/team_config":
@@ -490,14 +575,19 @@ class TeamClientHandler(BaseHTTPRequestHandler):
             self._send(404, '{"error":"not found"}', "application/json")
 
     def do_POST(self):
-        global _current_answer, _team_config, _preview_color
+        global _current_answer, _team_config, _preview_color, _game_master_url, _team_num
         try:
             length = min(int(self.headers.get("Content-Length", 0) or 0), 4096)
         except (ValueError, TypeError):
             length = 0
         body = self.rfile.read(length) if length > 0 else b"{}"
 
-        if self.path == "/reset":
+        if self.path == "/quit":
+            self._send(200, '{"ok":true}', "application/json")
+            log.info("Quit requested via UI")
+            threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)),
+                             daemon=True).start()
+        elif self.path == "/reset":
             with _answer_lock:
                 _current_answer = None
             self._send(200, '{"ok":true}', "application/json")
@@ -577,6 +667,44 @@ class TeamClientHandler(BaseHTTPRequestHandler):
                     _preview_color = None
                 log.info("Team config set: %s (%s)", name, color_name)
                 self._send(200, '{"ok":true}', "application/json")
+            except json.JSONDecodeError:
+                self._send(400, '{"error":"invalid json"}', "application/json")
+        elif self.path == "/connect":
+            try:
+                data = json.loads(body)
+                gm = str(data.get("game_master", "")).strip()
+                if not gm:
+                    self._send(400, '{"error":"game_master required"}', "application/json")
+                    return
+                if not gm.startswith("http"):
+                    gm = f"http://{gm}"
+
+                local_ip = _detect_lan_ip()
+                port = _server_port
+                callback_url = f"http://{local_ip}:{port}"
+                payload_bytes = json.dumps({"callback_url": callback_url}).encode()
+                req = urllib.request.Request(
+                    f"{gm}/register", method="POST", data=payload_bytes,
+                    headers={"Content-Type": "application/json"},
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        resp_data = json.loads(resp.read())
+                        _team_num = resp_data["team_num"]
+                except urllib.error.HTTPError as e:
+                    self._send(502, json.dumps({"error": f"Cannot reach game master: {e}"}),
+                               "application/json")
+                    return
+                except (urllib.error.URLError, OSError) as e:
+                    self._send(502, json.dumps({"error": f"Cannot reach game master: {e}"}),
+                               "application/json")
+                    return
+
+                _game_master_url = gm
+                _config_event.set()
+                log.info("Connected via browser: %s (team %s)", gm, _team_num)
+                self._send(200, json.dumps({"ok": True, "team_num": _team_num}),
+                           "application/json")
             except json.JSONDecodeError:
                 self._send(400, '{"error":"invalid json"}', "application/json")
         else:
@@ -852,7 +980,7 @@ def _register_with_master(game_master_url, local_ip, local_port):
 # ── Main ──
 
 def main():
-    global _game_master_url, _team_num
+    global _game_master_url, _team_num, _server_port
 
     logging.basicConfig(
         level=logging.INFO,
@@ -863,45 +991,54 @@ def main():
     parser = argparse.ArgumentParser(description="Quiz team client")
     parser.add_argument("--port", type=int, default=7777,
                         help="Port to listen on (default: 7777)")
-    parser.add_argument("--game-master", required=True,
-                        help="Game master address (host:port)")
+    parser.add_argument("--game-master", default="",
+                        help="Game master address (host:port); omit to configure via browser")
     parser.add_argument("--leds", action="store_true",
-                        help="Enable KlopfKlopf USB LED strip")
+                        help="Hint: kept for backward compatibility; LEDs are auto-detected")
     args = parser.parse_args()
 
-    gm = args.game_master
-    if not gm.startswith("http"):
-        gm = f"http://{gm}"
-    _game_master_url = gm
+    _server_port = args.port
 
-    # LED setup — optional hardware
+    if args.game_master:
+        gm = args.game_master
+        if not gm.startswith("http"):
+            gm = f"http://{gm}"
+        _game_master_url = gm
+
+    # LED setup — always try; fall back to NoOp if hardware not present
     leds = None
-    if args.leds:
-        try:
-            from leds.klopfklopf import LEDController
-            leds = LEDController()
-            leds.open()
-            log.info("LED strip connected")
-        except (ImportError, RuntimeError) as e:
-            log.warning("LED strip not available: %s", e)
-            leds = None
+    try:
+        from leds.klopfklopf import LEDController
+        leds = LEDController()
+        leds.open()
+        log.info("LED strip connected")
+    except (ImportError, RuntimeError) as e:
+        log.info("LED strip not available: %s", e)
+        leds = None
 
     if leds is None:
         from leds.stub import NoOpLEDController
         leds = NoOpLEDController()
 
-    # Start HTTP server immediately so the page loads while waiting for master
+    # Start HTTP server immediately so the page loads while registration happens
     server = ReusableThreadingHTTPServer(("0.0.0.0", args.port), TeamClientHandler)
     local_ip = _detect_lan_ip()
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     print(f"Team client running on http://{local_ip}:{args.port}")
-    print(f"Game master: {_game_master_url}")
 
-    # Register with game master to get team number (retries until master is up)
-    print("Registering with game master...")
-    _register_with_master(_game_master_url, local_ip, args.port)
-    print(f"Registered as Team {_team_num}")
+    led_runner = None
+    if _game_master_url:
+        # CLI-provided: register immediately (retries until master is up)
+        print(f"Game master: {_game_master_url}")
+        print("Registering with game master...")
+        _register_with_master(_game_master_url, local_ip, args.port)
+        print(f"Registered as Team {_team_num}")
+    else:
+        # No CLI flag: wait for browser config
+        print("No --game-master provided. Open the browser to configure.")
+        _config_event.wait()  # blocks until POST /connect succeeds
+        print(f"Configured via browser. Registered as Team {_team_num}")
 
     # Start LED driver thread (team_num now known)
     led_runner = ClientLEDRunner(leds, _game_master_url, _team_num)
