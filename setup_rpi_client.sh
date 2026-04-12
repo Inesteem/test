@@ -40,7 +40,8 @@ scp -q buzzers/buzzer.py buzzers/buzzer_server.py "$RPI:buzzer/"
 echo ">> Copying team client files..."
 scp -q team_client.py "$RPI:buzzer/"
 scp -q leds/__init__.py leds/stub.py leds/klopfklopf.py "$RPI:buzzer/leds/"
-scp -q static/simple-keyboard.min.js static/simple-keyboard.css static/keyboard.js "$RPI:buzzer/static/"
+scp -q static/simple-keyboard.min.js static/simple-keyboard.css static/keyboard.js static/quiz-icon.svg "$RPI:buzzer/static/"
+scp -q start-quiz-client.sh QuizBuzzer.desktop "$RPI:buzzer/"
 
 echo ">> Stopping old processes..."
 ssh "$RPI" '
@@ -71,10 +72,23 @@ echo ">> Verifying team client..."
 curl -sf "http://${RPI_HOST}:${RPI_CLIENT_PORT}/" > /dev/null || { echo "FAILED — team client not reachable"; exit 1; }
 echo "   Team client running at http://${RPI_HOST}:${RPI_CLIENT_PORT}"
 
+echo ">> Installing desktop icon..."
+ssh "$RPI" "
+    cd ~/buzzer
+    sed -i 's|DEPLOY_APP_DIR|/home/\$(whoami)/buzzer|g' start-quiz-client.sh
+    sed -i 's|DEPLOY_GM_HOST|${GM_HOST}|g' start-quiz-client.sh
+    chmod +x start-quiz-client.sh
+    sed 's|DEPLOY_APP_DIR|/home/'\$(whoami)'/buzzer|g' QuizBuzzer.desktop > ~/Desktop/QuizBuzzer.desktop
+    chmod +x ~/Desktop/QuizBuzzer.desktop
+    gio set ~/Desktop/QuizBuzzer.desktop metadata::trusted true 2>/dev/null || true
+"
+echo "   Desktop icon installed"
+
 echo ""
 echo ">> Done! RPi is running:"
 echo "   Buzzer server: http://${RPI_HOST}:${RPI_BUZZER_PORT}"
 echo "   Team client:   http://${RPI_HOST}:${RPI_CLIENT_PORT}"
+echo "   Desktop icon:  QuizBuzzer on RPi desktop"
 echo ""
 echo "   Open http://${RPI_HOST}:${RPI_CLIENT_PORT} on a phone/browser to play."
 echo "   Logs: ssh $RPI 'tail -f ~/buzzer/client.log'"

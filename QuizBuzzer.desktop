@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Quiz Buzzer
+Comment=Start the quiz team client kiosk
+Exec=DEPLOY_APP_DIR/start-quiz-client.sh
+Icon=DEPLOY_APP_DIR/static/quiz-icon.svg
+Terminal=false
+Type=Application
+Categories=Game;

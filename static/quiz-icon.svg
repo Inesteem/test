@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <circle cx="64" cy="64" r="60" fill="#1a1a2e" stroke="#e74c3c" stroke-width="4"/>
+  <!-- Buzzer button -->
+  <ellipse cx="64" cy="72" rx="28" ry="10" fill="#333"/>
+  <ellipse cx="64" cy="68" rx="28" ry="10" fill="#444"/>
+  <circle cx="64" cy="52" r="20" fill="#e74c3c"/>
+  <circle cx="64" cy="50" r="18" fill="#ff4444"/>
+  <!-- Question mark -->
+  <text x="64" y="58" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="bold" fill="#fff">?</text>
+  <!-- Small LEDs -->
+  <circle cx="24" cy="95" r="5" fill="#0066ff" opacity="0.8"/>
+  <circle cx="40" cy="100" r="4" fill="#ffcc00" opacity="0.8"/>
+  <circle cx="88" cy="100" r="4" fill="#2ecc71" opacity="0.8"/>
+  <circle cx="104" cy="95" r="5" fill="#cc00ff" opacity="0.8"/>
+</svg>
