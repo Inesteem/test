@@ -104,7 +104,8 @@ HTML_PAGE = (
                 width: 100%; max-width: 360px; margin-bottom: 20px; }
   .color-btn { height: 60px; border: 3px solid transparent; border-radius: 12px;
                cursor: pointer; font-weight: bold; font-size: 0.9em;
-               transition: all 0.15s; color: #000; }
+               transition: all 0.15s; color: #000;
+               display: flex; align-items: center; justify-content: center; }
   .color-btn.selected { border-color: #fff; transform: scale(1.08);
                         box-shadow: 0 0 20px rgba(255,255,255,0.4); }
   #name-input { font-size: 1.2em; padding: 12px; border-radius: 10px; border: 2px solid #333;
