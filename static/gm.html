@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Game Master</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #1a1a2e;
+  color: #fff;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+  transition: background 0.3s ease;
+}
+
+/* ── Connection status badge ── */
+#conn-badge {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.75rem;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: #333;
+  color: #aaa;
+  z-index: 9999;
+  transition: background 0.4s, color 0.4s;
+}
+#conn-badge.ok { background: #1a5e35; color: #7dffb0; }
+#conn-badge.err { background: #5e1a1a; color: #ffb0b0; }
+
+/* ── Generic text helpers ── */
+.big    { font-size: 2.5em; font-weight: 900; text-align: center; }
+.medium { font-size: 1.6em; font-weight: 700; text-align: center; }
+.small  { font-size: 1.1em; text-align: center; }
+.dim    { opacity: 0.6; }
+.bold   { font-weight: 900; }
+
+/* ── Question screen ── */
+.q-container {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1em;
+  opacity: 0.7;
+}
+.q-text {
+  font-size: 2.2em;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.3;
+}
+.q-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.q-choice {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 0.8rem 1.2rem;
+  font-size: 1.4em;
+  font-weight: 600;
+  border: 2px solid transparent;
+  transition: border-color 0.2s, background 0.2s;
+}
+.q-choice-label {
+  background: rgba(255,255,255,0.2);
+  border-radius: 6px;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.q-status {
+  font-size: 1em;
+  text-align: center;
+  opacity: 0.75;
+  min-height: 1.4em;
+}
+.q-ranking {
+  font-size: 0.9em;
+  text-align: center;
+  opacity: 0.5;
+  min-height: 1.2em;
+}
+
+/* Progress bar */
+.progress-wrap {
+  width: 100%;
+  height: 10px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #27ae60, #2ecc71);
+  transition: width 0.1s linear, background 0.5s;
+}
+
+/* ── Fire effect ── */
+@keyframes flicker {
+  0%,100% { opacity: 1;  transform: scaleX(1); }
+  25%      { opacity: .7; transform: scaleX(1.04); }
+  50%      { opacity: .9; transform: scaleX(0.97); }
+  75%      { opacity: .6; transform: scaleX(1.02); }
+}
+.fire-border::before,
+.fire-border::after {
+  content: '';
+  position: fixed;
+  top: 0; bottom: 0;
+  width: 18px;
+  background: linear-gradient(180deg,
+    #ff6b00 0%, #ff0 30%, #ff4500 60%, #ff0000 100%);
+  animation: flicker 0.18s infinite alternate;
+  z-index: 10;
+  filter: blur(2px);
+}
+.fire-border::before { left: 0; }
+.fire-border::after  { right: 0; }
+
+/* ── Feedback screen ── */
+.feedback-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+.feedback-icon {
+  font-size: 5em;
+  line-height: 1;
+}
+.feedback-msg  { font-size: 2.4em; font-weight: 900; text-align: center; }
+.feedback-info { font-size: 1.2em; text-align: center; opacity: 0.85; }
+.feedback-insult {
+  font-size: 1.3em;
+  font-style: italic;
+  text-align: center;
+  max-width: 700px;
+  opacity: 0.9;
+}
+
+/* ── Answer reveal ── */
+.reveal-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 2rem;
+  background: #c4930a;
+}
+.reveal-title  { font-size: 2.8em; font-weight: 900; text-align: center; }
+.reveal-q      { font-size: 1.4em; text-align: center; opacity: 0.85; }
+.reveal-answer { font-size: 2em; font-weight: 900; text-align: center; }
+.reveal-insult { font-size: 1.2em; font-style: italic; text-align: center; opacity: 0.85; }
+
+/* ── Timeout screen ── */
+.timeout-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: #7b1414;
+}
+
+/* ── Scores screen ── */
+.scores-box {
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 16px;
+  padding: 2rem 2.5rem;
+  min-width: 420px;
+  max-width: 680px;
+  width: 90%;
+}
+.scores-title { font-size: 1.8em; font-weight: 900; text-align: center; margin-bottom: 1.5rem; }
+.scores-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.1rem;
+}
+.score-rank { font-size: 1em; width: 1.8rem; text-align: right; opacity: 0.6; }
+.score-name { font-size: 1.1em; font-weight: 700; width: 9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.score-bar-wrap { flex: 1; height: 22px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+.score-bar {
+  height: 100%;
+  border-radius: 4px;
+  min-width: 4px;
+  transition: width 0.6s ease;
+}
+.score-val { font-size: 1.1em; font-weight: 700; width: 2.8rem; text-align: right; }
+.scores-winner {
+  text-align: center;
+  font-size: 1.6em;
+  font-weight: 900;
+  margin-top: 1.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.2);
+}
+.scores-hint {
+  text-align: center;
+  font-size: 0.9em;
+  margin-top: 1rem;
+  opacity: 0.5;
+}
+
+/* ── Falling text ── */
+@keyframes fallIn {
+  0%   { transform: translateY(-120%); opacity: 0; }
+  60%  { transform: translateY(4%);    opacity: 1; }
+  80%  { transform: translateY(-2%);   opacity: 1; }
+  100% { transform: translateY(0);     opacity: 1; }
+}
+.falling-text {
+  font-size: 4em;
+  font-weight: 900;
+  text-align: center;
+  animation: fallIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.falling-correct { color: #2ecc71; }
+.falling-wrong   { color: #e74c3c; }
+
+/* ── Ready screen ── */
+.ready-art {
+  font-family: monospace;
+  font-size: 1.5em;
+  white-space: pre;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+.ready-teams {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+.ready-team {
+  font-size: 1.3em;
+  font-weight: 700;
+  padding: 0.3rem 1.2rem;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+}
+.ready-hint { margin-top: 1.2rem; opacity: 0.5; font-size: 0.95em; }
+
+/* ── Waiting / buzzer-assign screen ── */
+.waiting-box {
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 2rem 2.5rem;
+  min-width: 400px;
+  max-width: 600px;
+  width: 90%;
+}
+.waiting-title    { font-size: 1.8em; font-weight: 900; text-align: center; }
+.waiting-subtitle { font-size: 1em; text-align: center; opacity: 0.6; margin-top: 0.4rem; }
+.waiting-divider  { border: none; border-top: 1px solid rgba(255,255,255,0.15); margin: 1rem 0; }
+.waiting-items    { display: flex; flex-direction: column; gap: 0.6rem; }
+.waiting-item {
+  font-size: 1.1em;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+}
+.waiting-item.done    { font-weight: 700; background: rgba(39,174,96,0.2); }
+.waiting-item.pending { opacity: 0.5; }
+.waiting-status {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 1em;
+  font-weight: 700;
+  padding: 0.5rem 0.8rem;
+  border-radius: 8px;
+}
+.waiting-status.all-done { background: rgba(255,255,255,0.18); }
+
+/* ── Buzzer assign screen ── */
+.buzz-assign-current {
+  font-size: 1.8em;
+  font-weight: 900;
+  text-align: center;
+  padding: 0.8rem 1.5rem;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.2);
+  margin-bottom: 0.8rem;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+@keyframes pulse {
+  from { background: rgba(255,255,255,0.12); }
+  to   { background: rgba(255,255,255,0.28); }
+}
+
+/* ── Error screen ── */
+.error-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+.error-msg    { font-size: 1.8em; font-weight: 900; color: #e74c3c; text-align: center; }
+.error-detail { font-size: 1.1em; opacity: 0.7; text-align: center; }
+
+/* ── Continue prompt overlay ── */
+.continue-overlay {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.75);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 0.5rem 1.5rem;
+  font-size: 1em;
+  opacity: 0.8;
+  animation: fadeIn 0.3s ease;
+  z-index: 100;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 0.8; transform: translateX(-50%) translateY(0); }
+}
+</style>
+</head>
+<body>
+<div id="conn-badge">connecting...</div>
+<div id="screen"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentData = null;
+let progressRafId = null;
+let progressStartTime = null;
+let progressElapsed = null;
+let progressTimeout = null;
+
+// ── SSE connection ─────────────────────────────────────────────────────────────
+const badge = document.getElementById('conn-badge');
+const screenEl = document.getElementById('screen');
+
+function connectSSE() {
+  const evtSource = new EventSource('/gm/events');
+
+  evtSource.onopen = () => {
+    badge.textContent = 'connected';
+    badge.className = 'ok';
+  };
+
+  evtSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      currentData = data;
+      renderScreen(data);
+    } catch (e) {
+      console.error('SSE parse error', e);
+    }
+  };
+
+  evtSource.onerror = () => {
+    badge.textContent = 'reconnecting...';
+    badge.className = 'err';
+    evtSource.close();
+    setTimeout(connectSSE, 2000);
+  };
+}
+connectSSE();
+
+// ── Keyboard → POST /gm/command ───────────────────────────────────────────────
+const KEY_MAP = {
+  'a': 'a', 'A': 'a',
+  'b': 'b', 'B': 'b',
+  'c': 'c', 'C': 'c',
+  'r': 'r', 'R': 'r',
+  's': 's', 'S': 's',
+  'Enter': 'enter',
+  'Escape': 'escape',
+  ' ': 'space',
+  'ArrowUp': 'up',
+  'ArrowDown': 'down',
+  'ArrowLeft': 'left',
+  'ArrowRight': 'right',
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  const cmd = KEY_MAP[e.key];
+  if (!cmd) return;
+  e.preventDefault();
+  fetch('/gm/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cmd }),
+  }).catch(() => {}); // fire and forget
+});
+
+// ── Progress bar RAF loop ─────────────────────────────────────────────────────
+function stopProgress() {
+  if (progressRafId !== null) {
+    cancelAnimationFrame(progressRafId);
+    progressRafId = null;
+  }
+}
+
+function startProgress(elapsed, timeout) {
+  stopProgress();
+  if (timeout == null || timeout <= 0) return;
+  progressStartTime = performance.now() - (elapsed || 0) * 1000;
+  progressElapsed = elapsed || 0;
+  progressTimeout = timeout;
+
+  function tick() {
+    const el = document.getElementById('progress-fill');
+    if (!el) { stopProgress(); return; }
+    const now = performance.now();
+    const elapsedSec = (now - progressStartTime) / 1000;
+    const remaining = Math.max(0, progressTimeout - elapsedSec);
+    const pct = Math.max(0, Math.min(100, (remaining / progressTimeout) * 100));
+    el.style.width = pct + '%';
+
+    // Colour shift: green → yellow → red as time runs out
+    if (pct > 50) {
+      el.style.background = 'linear-gradient(90deg, #27ae60, #2ecc71)';
+    } else if (pct > 20) {
+      el.style.background = 'linear-gradient(90deg, #e67e22, #f39c12)';
+    } else {
+      el.style.background = 'linear-gradient(90deg, #c0392b, #e74c3c)';
+    }
+    if (remaining > 0) {
+      progressRafId = requestAnimationFrame(tick);
+    }
+  }
+  progressRafId = requestAnimationFrame(tick);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function teamColor(tc, key) {
+  if (!tc) return '#888';
+  const entry = tc[String(key)] || tc[key];
+  return entry ? (entry.color || '#888') : '#888';
+}
+
+// ── Screen renderers ───────────────────────────────────────────────────────────
+function renderScreen(data) {
+  stopProgress();
+  const screen = data.screen;
+
+  // Remove fire border from body by default
+  document.body.classList.remove('fire-border');
+
+  switch (screen) {
+    case 'question':      renderQuestion(data);     break;
+    case 'feedback':      renderFeedback(data);     break;
+    case 'answer_reveal': renderAnswerReveal(data); break;
+    case 'timeout':       renderTimeout(data);      break;
+    case 'scores':        renderScores(data);        break;
+    case 'falling_text':  renderFallingText(data);  break;
+    case 'ready':         renderReady(data);         break;
+    case 'waiting':       renderWaiting(data);       break;
+    case 'buzzer_assign': renderBuzzerAssign(data);  break;
+    case 'error':         renderError(data);         break;
+    default:              renderUnknown(data);        break;
+  }
+
+  // Continue-prompt overlay (any screen can carry this field)
+  const existingOverlay = document.querySelector('.continue-overlay');
+  if (data.continue_prompt) {
+    if (!existingOverlay) {
+      const ov = document.createElement('div');
+      ov.className = 'continue-overlay';
+      ov.textContent = data.continue_prompt;
+      document.body.appendChild(ov);
+    }
+  } else {
+    if (existingOverlay) existingOverlay.remove();
+  }
+}
+
+function renderQuestion(data) {
+  document.getElementById('screen').style.background = '';
+  screenEl.style.background = '#1a1a2e';
+
+  if (data.is_final) {
+    document.body.classList.add('fire-border');
+  }
+
+  const choices = data.choices || {};
+  const labels = ['a', 'b', 'c'];
+  const choiceHTML = labels.map(l => {
+    const text = choices[l] || '';
+    if (!text) return '';
+    return `<div class="q-choice">
+      <span class="q-choice-label">${l.toUpperCase()}</span>
+      <span>${esc(text)}</span>
+    </div>`;
+  }).join('');
+
+  const progressHTML = (data.timeout != null)
+    ? `<div class="progress-wrap"><div class="progress-fill" id="progress-fill" style="width:100%"></div></div>`
+    : '';
+
+  screenEl.innerHTML = `
+    <div class="q-container">
+      <div class="q-header">
+        <span>Question ${esc(data.question_num)} / ${esc(data.total)}</span>
+        ${data.is_final ? '<span style="color:#ff6b00;font-weight:900">FINAL QUESTION</span>' : ''}
+      </div>
+      ${progressHTML}
+      <div class="q-text">${esc(data.question || '')}</div>
+      <div class="q-choices">${choiceHTML}</div>
+      <div class="q-status">${esc(data.status_line || '')}</div>
+      <div class="q-ranking dim">${esc(data.ranking_line || '')}</div>
+    </div>`;
+
+  if (data.timeout != null) {
+    startProgress(data.elapsed, data.timeout);
+  }
+}
+
+function renderFeedback(data) {
+  stopProgress();
+  const bg    = data.correct ? '#145a32' : '#641e16';
+  const icon  = data.correct ? '&#10003;' : '&#10007;';
+  const msg   = data.correct
+    ? `CORRECT! +1 for ${esc(data.team_name)}!`
+    : `WRONG! -1 for ${esc(data.team_name)}.`;
+  const insultHTML = data.insult
+    ? `<div class="feedback-insult">&ldquo;${esc(data.insult)}&rdquo;</div>` : '';
+  const caHTML = (data.correct && data.correct_answer)
+    ? `<div class="feedback-info bold">${esc(data.correct_answer)}</div>` : '';
+  const qtHTML = data.question_text
+    ? `<div class="feedback-info dim" style="font-size:1em">${esc(data.question_text)}</div>` : '';
+
+  screenEl.style.background = bg;
+  screenEl.innerHTML = `
+    <div class="feedback-screen">
+      <div class="feedback-icon">${icon}</div>
+      <div class="feedback-msg">${msg}</div>
+      ${qtHTML}
+      ${caHTML}
+      ${insultHTML}
+    </div>`;
+}
+
+function renderAnswerReveal(data) {
+  stopProgress();
+  const choices = data.choices || {};
+  const answerKey = data.answer || '';
+  const answerText = answerKey
+    ? `${answerKey.toUpperCase()}) ${esc(choices[answerKey] || '')}`
+    : '';
+  const insultHTML = data.insult
+    ? `<div class="reveal-insult">&ldquo;${esc(data.insult)}&rdquo;</div>` : '';
+
+  screenEl.style.background = '';
+  screenEl.innerHTML = `
+    <div class="reveal-screen">
+      <div class="reveal-title">${esc(data.title || 'NOBODY GOT IT!')}</div>
+      ${insultHTML}
+      <div class="reveal-q">${esc(data.question || '')}</div>
+      <div class="reveal-answer">The answer was: ${answerText}</div>
+    </div>`;
+}
+
+function renderTimeout(data) {
+  stopProgress();
+  screenEl.style.background = '';
+  const insultHTML = data.insult
+    ? `<div class="feedback-insult">&ldquo;${esc(data.insult)}&rdquo;</div>` : '';
+
+  screenEl.innerHTML = `
+    <div class="timeout-screen">
+      <div class="feedback-icon">&#9200;</div>
+      <div class="feedback-msg">TIME&rsquo;S UP!</div>
+      <div class="medium">${esc(data.team_name || '')} ran out of time.</div>
+      ${insultHTML}
+    </div>`;
+}
+
+function renderScores(data) {
+  stopProgress();
+  screenEl.style.background = '#1a1a2e';
+  const scores = data.scores || {};
+  const tc = data.team_config || {};
+  const final = data.final;
+
+  const sorted = Object.entries(scores)
+    .map(([k, v]) => ({ key: k, score: Number(v), ...(tc[k] || {}) }))
+    .sort((a, b) => b.score - a.score);
+
+  const maxScore = sorted.reduce((m, t) => Math.max(m, Math.abs(t.score), 1), 1);
+
+  const rowsHTML = sorted.map((t, i) => {
+    const pct = Math.max(4, Math.round((Math.abs(t.score) / maxScore) * 100));
+    const barColor = t.score >= 0 ? (t.color || '#27ae60') : '#e74c3c';
+    const scoreStr = t.score > 0 ? `+${t.score}` : String(t.score);
+    return `<div class="scores-row">
+      <span class="score-rank">${i + 1}.</span>
+      <span class="score-name" style="color:${esc(t.color || '#fff')}">${esc(t.name || `Team ${t.key}`)}</span>
+      <div class="score-bar-wrap">
+        <div class="score-bar" style="width:${pct}%;background:${esc(barColor)}"></div>
+      </div>
+      <span class="score-val">${esc(scoreStr)}</span>
+    </div>`;
+  }).join('');
+
+  const winnerHTML = (final && sorted.length)
+    ? `<div class="scores-winner" style="color:${esc(sorted[0].color || '#fff')}">${esc(sorted[0].name || `Team ${sorted[0].key}`)} wins!</div>`
+    : '';
+
+  const hintText = final
+    ? 'Press any key to exit'
+    : 'Press any key for next question';
+
+  screenEl.innerHTML = `
+    <div class="scores-box">
+      <div class="scores-title">${final ? 'FINAL SCORES' : 'Scores'}</div>
+      ${rowsHTML}
+      ${winnerHTML}
+      <div class="scores-hint">${hintText}</div>
+    </div>`;
+}
+
+function renderFallingText(data) {
+  stopProgress();
+  screenEl.style.background = '#1a1a2e';
+  const styleClass = (data.style === 'correct') ? 'falling-correct' : 'falling-wrong';
+  screenEl.innerHTML = `<div class="falling-text ${styleClass}">${esc(data.text || '')}</div>`;
+}
+
+function renderReady(data) {
+  stopProgress();
+  screenEl.style.background = '#1a1a2e';
+  const tc = data.team_config || {};
+  const teamsHTML = Object.entries(tc).map(([, t]) =>
+    `<div class="ready-team" style="border-left:5px solid ${esc(t.color || '#888')};padding-left:1rem">
+      ${esc(t.name || '?')} &mdash; <span style="color:${esc(t.color || '#888')}">${esc(t.color_name || t.color || '')}</span>
+    </div>`
+  ).join('');
+
+  screenEl.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:0.5rem;max-width:600px;width:100%">
+      <pre class="ready-art">${esc('QUIZ')}</pre>
+      <hr style="width:100%;border-color:rgba(255,255,255,0.2);margin:0.5rem 0">
+      <div class="ready-teams">${teamsHTML}</div>
+      <div class="ready-hint">Press any key to start</div>
+    </div>`;
+}
+
+function renderWaiting(data) {
+  stopProgress();
+  screenEl.style.background = '#1a1a2e';
+  const items = data.items || [];
+  const allDone = items.length > 0 && items.every(i => i.done);
+
+  const itemsHTML = items.map(item =>
+    `<div class="waiting-item ${item.done ? 'done' : 'pending'}">${esc(item.label || '')}</div>`
+  ).join('');
+
+  screenEl.innerHTML = `
+    <div class="waiting-box">
+      <div class="waiting-title">${esc(data.title || 'WAITING...')}</div>
+      <div class="waiting-subtitle">${esc(data.subtitle || '')}</div>
+      <hr class="waiting-divider">
+      <div class="waiting-items">${itemsHTML}</div>
+      <div class="waiting-status ${allDone ? 'all-done' : ''}">${esc(data.status || '')}</div>
+    </div>`;
+}
+
+function renderBuzzerAssign(data) {
+  stopProgress();
+  screenEl.style.background = '#1a1a2e';
+  const assigned = data.assigned || {};
+  const tc = data.team_config || {};
+  const currentColor = data.current_color || '#fff';
+
+  const slotsHTML = Object.entries(tc).sort((a, b) => Number(a[0]) - Number(b[0])).map(([k, t]) => {
+    const info = assigned[k];
+    const label = info
+      ? `&#10003; ${esc(info.name)}: buzzer ${esc(info.buzzer_num)}`
+      : `${esc(t.name)}: waiting...`;
+    const style = info ? 'done' : 'pending';
+    return `<div class="waiting-item ${style}">${label}</div>`;
+  }).join('');
+
+  screenEl.innerHTML = `
+    <div class="waiting-box">
+      <div class="waiting-title">BUZZER ASSIGNMENT</div>
+      <div class="waiting-subtitle">Esc = skip remaining</div>
+      <hr class="waiting-divider">
+      <div class="buzz-assign-current" style="color:${esc(currentColor)}">
+        &rsaquo;&rsaquo;&rsaquo; ${esc(data.current_name || '?')}: PRESS YOUR BUZZER! &lsaquo;&lsaquo;&lsaquo;
+      </div>
+      <div class="waiting-items">${slotsHTML}</div>
+    </div>`;
+}
+
+function renderError(data) {
+  stopProgress();
+  screenEl.style.background = '#1a1a2e';
+  const detailHTML = data.detail
+    ? `<div class="error-detail">${esc(data.detail)}</div>` : '';
+  screenEl.innerHTML = `
+    <div class="error-screen">
+      <div class="error-msg">${esc(data.message || 'Error')}</div>
+      ${detailHTML}
+      <div class="dim small" style="margin-top:1rem">Press any key to exit.</div>
+    </div>`;
+}
+
+function renderUnknown(data) {
+  stopProgress();
+  screenEl.style.background = '#1a1a2e';
+  screenEl.innerHTML = `<div class="medium dim">Screen: ${esc(data.screen || 'unknown')}</div>`;
+}
+</script>
+</body>
+</html>

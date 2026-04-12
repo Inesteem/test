@@ -2,15 +2,24 @@
 
 Runs in a daemon thread alongside the curses UI.
 
-    GET  /state        → current game state as JSON
-    POST /register     → register a client, get assigned team number
-    POST /team_config  → submit team name+color (validated for uniqueness)
+    GET  /state              → current game state as JSON
+    POST /register           → register a client, get assigned team number
+    POST /team_config        → submit team name+color (validated for uniqueness)
+    GET  /gm                 → game master browser UI (gm.html)
+    GET  /gm/static/<file>   → static files from the static/ directory
+    GET  /gm/events          → SSE stream (WebDisplay state pushes)
+    POST /gm/command         → receive a keyboard command from the browser GM UI
 """
 
 import json
+import os
+import queue
 import re
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+# Resolve the static/ directory relative to this file (quiz/../static/)
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 
 _HEX_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
@@ -28,6 +37,13 @@ class GameMasterHandler(BaseHTTPRequestHandler):
             state = self.server.game_state.snapshot()
             body = json.dumps(state)
             self._send(200, body)
+        elif self.path == "/gm":
+            self._serve_file("gm.html", "text/html")
+        elif self.path.startswith("/gm/static/"):
+            filename = self.path[len("/gm/static/"):]
+            self._serve_file(filename, self._guess_content_type(filename))
+        elif self.path == "/gm/events":
+            self._handle_sse()
         else:
             self._send(404, '{"error":"not found"}')
 
@@ -42,6 +58,8 @@ class GameMasterHandler(BaseHTTPRequestHandler):
             self._handle_register(body)
         elif self.path.rstrip("/") == "/team_config":
             self._handle_team_config(body)
+        elif self.path.rstrip("/") == "/gm/command":
+            self._handle_gm_command(body)
         else:
             self._send(404, '{"error":"not found"}')
 
@@ -141,6 +159,89 @@ class GameMasterHandler(BaseHTTPRequestHandler):
             "claimed_colors": claimed,
         }))
 
+    def _handle_gm_command(self, body):
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self._send(400, '{"error":"invalid json"}')
+            return
+
+        cmd = data.get("cmd", "")
+        web_display = getattr(self.server, "web_display", None)
+        if cmd and web_display is not None:
+            web_display.push_command(cmd)
+        self._send(200, '{"ok":true}')
+
+    def _handle_sse(self):
+        """Server-Sent Events stream for WebDisplay."""
+        web_display = getattr(self.server, "web_display", None)
+        if web_display is None:
+            self._send(503, '{"error":"no web display"}')
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+
+        client_queue = web_display.add_sse_client()
+        try:
+            while True:
+                try:
+                    data = client_queue.get(timeout=15)
+                    msg = f"data: {json.dumps(data)}\n\n"
+                    self.wfile.write(msg.encode())
+                    self.wfile.flush()
+                except queue.Empty:
+                    # Keepalive comment — keeps the connection alive through
+                    # proxies and browser idle timeouts.
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            web_display.remove_sse_client(client_queue)
+
+    def _serve_file(self, filename, content_type):
+        filepath = os.path.join(_STATIC_DIR, filename)
+        # Guard against path traversal
+        try:
+            filepath = os.path.realpath(filepath)
+            static_real = os.path.realpath(_STATIC_DIR)
+            if not filepath.startswith(static_real + os.sep) and filepath != static_real:
+                self._send(403, '{"error":"forbidden"}')
+                return
+        except Exception:
+            self._send(403, '{"error":"forbidden"}')
+            return
+
+        try:
+            with open(filepath, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(data)
+        except FileNotFoundError:
+            self._send(404, '{"error":"not found"}')
+
+    @staticmethod
+    def _guess_content_type(filename):
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        return {
+            "html": "text/html",
+            "css":  "text/css",
+            "js":   "application/javascript",
+            "json": "application/json",
+            "svg":  "image/svg+xml",
+            "png":  "image/png",
+            "ico":  "image/x-icon",
+        }.get(ext, "application/octet-stream")
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -161,12 +262,19 @@ class GameMasterHandler(BaseHTTPRequestHandler):
         pass  # silent — don't interfere with curses
 
 
-def start_game_master_server(game_state, port=9000, max_teams=None):
-    """Start the game master HTTP server in a daemon thread. Returns the server."""
+def start_game_master_server(game_state, port=9000, max_teams=None,
+                             web_display=None):
+    """Start the game master HTTP server in a daemon thread. Returns the server.
+
+    web_display: optional WebDisplay instance.  When provided, the server
+        will serve the GM browser UI at /gm, stream SSE at /gm/events, and
+        accept keyboard commands at POST /gm/command.
+    """
     server = ReusableThreadingHTTPServer(("0.0.0.0", port), GameMasterHandler)
     server.game_state = game_state
     server.max_teams = max_teams
     server.registration_lock = threading.Lock()
+    server.web_display = web_display  # None if not using WebDisplay
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
