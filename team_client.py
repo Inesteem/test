@@ -240,6 +240,8 @@ function submitConnect() {
         body: JSON.stringify({game_master: gm})
     }).then(r => r.json()).then(data => {
         if (data.ok) {
+            // Remember for next time
+            localStorage.setItem('quiz_gm', gm);
             // Hide config, show setup
             document.getElementById('config').style.display = 'none';
             document.getElementById('setup').style.display = 'flex';
@@ -277,6 +279,8 @@ function initSetup() {
       document.getElementById('config').style.display = 'flex';
       document.getElementById('setup').style.display = 'none';
       document.getElementById('port-input').value = info.port || '7777';
+      const saved = localStorage.getItem('quiz_gm');
+      if (saved) document.getElementById('gm-input').value = saved;
     }
   });
 
