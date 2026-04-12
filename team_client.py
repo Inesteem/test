@@ -223,6 +223,7 @@ let configSubmitted = false;
 let myAnswer = null;
 let isMyTurn = false;
 let gameStarted = false;
+let myBuzzerNum = null;  // set from buzzer_map after assignment
 
 // ── Config phase ──
 
@@ -382,6 +383,7 @@ function showWaiting() {
 }
 
 function resetToSetup() {
+  myBuzzerNum = null;
   fetch('/new_game', {method:'POST'}).then(() => { location.reload(); });
 }
 
@@ -417,8 +419,14 @@ function updateUI(state) {
   const scores = document.getElementById('scores');
   const buttons = document.querySelectorAll('.btn');
 
-  // Fetch our team num from the server-provided info
-  const teamNum = document.getElementById('team-num').textContent;
+  // Fetch our registration slot number
+  const regNum = document.getElementById('team-num').textContent;
+
+  // After buzzer assignment, resolve our actual buzzer number
+  if (!myBuzzerNum && state.buzzer_map && state.buzzer_map[regNum]) {
+    myBuzzerNum = String(state.buzzer_map[regNum]);
+  }
+  const teamNum = myBuzzerNum || regNum;
 
   // If the game has moved past idle/setup, switch to game view
   if (state.phase && state.phase !== 'idle') {
@@ -452,10 +460,22 @@ function updateUI(state) {
       status.textContent = 'BUZZ IN!';
       status.style.background = '#f39c12';
       question.textContent = state.question_text || '';
+      if (state.choices) {
+        document.getElementById('btn-a').textContent = 'A) ' + (state.choices.a || '');
+        document.getElementById('btn-b').textContent = 'B) ' + (state.choices.b || '');
+        document.getElementById('btn-c').textContent = 'C) ' + (state.choices.c || '');
+      }
     } else if (state.phase === 'answering') {
-      status.textContent = 'Team ' + state.active_team + ' is answering...';
+      const activeName = state.teams && state.teams[state.active_team]
+        ? state.teams[state.active_team].name : 'Team ' + state.active_team;
+      status.textContent = activeName + ' is answering...';
       status.style.background = '#16213e';
       question.textContent = state.question_text || '';
+      if (state.choices) {
+        document.getElementById('btn-a').textContent = 'A) ' + (state.choices.a || '');
+        document.getElementById('btn-b').textContent = 'B) ' + (state.choices.b || '');
+        document.getElementById('btn-c').textContent = 'C) ' + (state.choices.c || '');
+      }
     } else if (state.phase === 'buzzer_assign') {
         const isMe = state.assign_team && String(state.assign_team) === teamNum;
         // Check if we've already been assigned
@@ -479,9 +499,11 @@ function updateUI(state) {
         }
         question.textContent = parts.length ? parts.join('  ') : '';
     } else if (state.phase === 'feedback') {
-      status.textContent = state.feedback || 'Feedback';
-      status.style.background = '#16213e';
-      question.textContent = '';
+      const fbTeam = state.feedback_team || '';
+      const fbCorrect = state.feedback_correct;
+      status.textContent = (fbCorrect ? '\u2713 CORRECT' : '\u2717 WRONG') + (fbTeam ? ' \u2014 ' + fbTeam : '');
+      status.style.background = fbCorrect ? '#2ecc71' : '#e74c3c';
+      question.textContent = state.question_text || '';
     } else if (state.phase === 'scores' || state.phase === 'final_scores') {
       status.textContent = state.phase === 'final_scores' ? 'FINAL SCORES' : 'Scoreboard';
       status.style.background = '#16213e';

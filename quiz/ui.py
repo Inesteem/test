@@ -146,10 +146,12 @@ def main(stdscr):
             team_urls = {buzzer_map[slot]: url for slot, url in team_urls.items()}
             answer_source = TeamAnswerSource(team_urls)
             buzzers = [(num, None) for num in sorted(team_config.keys())]
-            # Push final team data so clients can show it during ready screen
+            # Push final team data + buzzer mapping so clients can update
+            # their team number from registration slot to actual buzzer number
             game_state.update(
                 teams={str(k): v for k, v in team_config.items()},
                 scores={str(k): 0 for k in team_config},
+                buzzer_map={str(slot): bz for slot, bz in buzzer_map.items()},
             )
         else:
             team_config = setup_teams(stdscr, buzzers, leds)
