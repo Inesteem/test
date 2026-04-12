@@ -26,33 +26,36 @@ from quiz.game_state import GameState
 # Shared fakes
 # ---------------------------------------------------------------------------
 
-class FakeWin:
-    """Fake curses window that scripts getch() responses and swallows drawing."""
+class FakeDisplay:
+    """Fake Display that scripts get_command() responses and swallows drawing."""
 
-    def __init__(self, key_sequence=()):
-        self._keys = list(key_sequence)
-        self.nodelay_mode = False
-        self.getch_calls = 0
+    def __init__(self, command_sequence=()):
+        # command_sequence: mix of string commands ("r", "s", "a"…) and None
+        # (meaning no command this poll).  Plain integers (legacy key codes) are
+        # converted automatically so old test construction still works.
+        self._commands = []
+        for item in command_sequence:
+            if item == -1:
+                self._commands.append(None)
+            elif isinstance(item, int):
+                ch = chr(item).lower() if 0 <= item <= 255 else None
+                self._commands.append(ch)
+            else:
+                self._commands.append(item)
+        self.get_command_calls = 0
+        self.flush_calls = 0
 
-    def getch(self):
-        self.getch_calls += 1
-        if self._keys:
-            return self._keys.pop(0)
-        return -1  # no key
+    def get_command(self):
+        self.get_command_calls += 1
+        if self._commands:
+            return self._commands.pop(0)
+        return None
 
-    def nodelay(self, mode):
-        self.nodelay_mode = mode
+    def flush_input(self):
+        self.flush_calls += 1
 
-    def getmaxyx(self):
-        return (24, 80)
-
-    # curses drawing methods — all no-op
-    def addstr(self, *a, **k): pass
-    def clear(self): pass
-    def refresh(self): pass
-    def bkgd(self, *a, **k): pass
-    def chgat(self, *a, **k): pass
-    def move(self, *a, **k): pass
+    def draw_question(self, q, question_num, total, **kwargs):
+        pass  # no-op
 
 
 class FakeCtrl:
@@ -117,10 +120,8 @@ def no_sleep():
 
 @pytest.fixture
 def no_draw():
-    """Skip draw_question and flushinp so we don't touch a real terminal."""
-    with patch("quiz.flow.draw_question"), \
-            patch("quiz.flow.curses.flushinp"):
-        yield
+    """No-op: draw_question and flush_input are now on the FakeDisplay object."""
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +181,7 @@ class TestBroadcastState:
 class TestPhase1BuzzIn:
 
     def test_buzz_returns_buzzed(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin()
+        win = FakeDisplay()
         # First call to get_ranking() returns [1] — someone already pressed
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
@@ -193,7 +194,7 @@ class TestPhase1BuzzIn:
         assert result == _R_BUZZED
 
     def test_r_key_returns_reset(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin(key_sequence=[ord("r")])
+        win = FakeDisplay(command_sequence=[ord("r")])
         ctrl = FakeCtrl([[]])  # no one buzzed
         leds = make_leds()
         snd = make_sound()
@@ -205,7 +206,7 @@ class TestPhase1BuzzIn:
         assert result == _R_RESET
 
     def test_s_key_returns_skipped(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin(key_sequence=[ord("s")])
+        win = FakeDisplay(command_sequence=[ord("s")])
         ctrl = FakeCtrl([[]])
         leds = make_leds()
         snd = make_sound()
@@ -217,7 +218,7 @@ class TestPhase1BuzzIn:
         assert result == _R_SKIPPED
 
     def test_final_question_uses_final_countdown_music(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin()
+        win = FakeDisplay()
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -230,7 +231,7 @@ class TestPhase1BuzzIn:
         snd.jeopardy_thinking.assert_not_called()
 
     def test_normal_question_uses_jeopardy_music(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin()
+        win = FakeDisplay()
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -243,7 +244,7 @@ class TestPhase1BuzzIn:
         snd.final_countdown.assert_not_called()
 
     def test_game_state_updated_to_buzzing(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin()
+        win = FakeDisplay()
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -266,7 +267,7 @@ class TestPhase1BuzzIn:
 class TestPhase2WaitForNextBuzz:
 
     def test_new_buzz_returns_buzzed(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin()
+        win = FakeDisplay()
         # First ranking has 1 entry (turn=1, i.e. already answered), second has 2
         ctrl = FakeCtrl([[1], [1, 2]])
         leds = make_leds()
@@ -279,7 +280,7 @@ class TestPhase2WaitForNextBuzz:
         assert result == _R_BUZZED
 
     def test_r_key_returns_reset(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin(key_sequence=[ord("r")])
+        win = FakeDisplay(command_sequence=[ord("r")])
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -291,7 +292,7 @@ class TestPhase2WaitForNextBuzz:
         assert result == _R_RESET
 
     def test_s_key_returns_skipped(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin(key_sequence=[ord("s")])
+        win = FakeDisplay(command_sequence=[ord("s")])
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -304,7 +305,7 @@ class TestPhase2WaitForNextBuzz:
 
     def test_timeout_returns_timed_out(self, sample_question, team_config, no_draw):
         """Simulate 5s passing without a new buzz by patching time.monotonic."""
-        win = FakeWin()
+        win = FakeDisplay()
         ctrl = FakeCtrl([[1]])  # still just 1 entry
         leds = make_leds()
         snd = make_sound()
@@ -328,7 +329,7 @@ class TestPhase2WaitForNextBuzz:
         assert result == _R_TIMED_OUT
 
     def test_resets_game_state_active_team(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin()
+        win = FakeDisplay()
         ctrl = FakeCtrl([[1], [1, 2]])
         leds = make_leds()
         snd = make_sound()
@@ -351,7 +352,7 @@ class TestPhase2WaitForNextBuzz:
 class TestPhase2AnswerCountdown:
 
     def test_correct_key_returns_answered(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin(key_sequence=[ord("c")])  # the correct answer
+        win = FakeDisplay(command_sequence=[ord("c")])  # the correct answer
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -368,7 +369,7 @@ class TestPhase2AnswerCountdown:
         assert result[1] == "c"
 
     def test_s_key_returns_skipped(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin(key_sequence=[ord("s")])
+        win = FakeDisplay(command_sequence=[ord("s")])
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -383,7 +384,7 @@ class TestPhase2AnswerCountdown:
         assert result == _R_SKIPPED
 
     def test_r_key_returns_reset(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin(key_sequence=[ord("r")])
+        win = FakeDisplay(command_sequence=[ord("r")])
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -398,7 +399,7 @@ class TestPhase2AnswerCountdown:
         assert result == _R_RESET
 
     def test_multiclient_polls_answer_source(self, sample_question, team_config, no_sleep, no_draw):
-        win = FakeWin()
+        win = FakeDisplay()
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -418,7 +419,7 @@ class TestPhase2AnswerCountdown:
 
     def test_multiclient_ignores_keyboard_abc(self, sample_question, team_config, no_sleep, no_draw):
         """In multi-client mode, a/b/c on keyboard should NOT answer."""
-        win = FakeWin(key_sequence=[ord("a"), ord("s")])  # try 'a' then skip
+        win = FakeDisplay(command_sequence=[ord("a"), ord("s")])  # try 'a' then skip
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -437,7 +438,7 @@ class TestPhase2AnswerCountdown:
 
     def test_timeout_returns_timed_out(self, sample_question, team_config, no_draw):
         """Simulate the answer timer expiring."""
-        win = FakeWin()
+        win = FakeDisplay()
         ctrl = FakeCtrl([[1]])
         leds = make_leds()
         snd = make_sound()
@@ -486,7 +487,7 @@ class TestRunQuestionE2E:
     ):
         # Phase 1 iterates: (getch=-1, ranking=[]) twice, then (getch=-1,
         # ranking=[1]) to buzz. Phase 2b then sees getch=ord("c").
-        win = FakeWin(key_sequence=[-1, -1, -1, ord("c")])
+        win = FakeDisplay(command_sequence=[-1, -1, -1, ord("c")])
         ctrl = FakeCtrl([[], [], [1]])
         leds = make_leds()
         snd = make_sound()
@@ -504,7 +505,7 @@ class TestRunQuestionE2E:
     ):
         # Phase 1: two empty polls → buzz. Phase 2b: 'a' (wrong).
         # Phase 2a (wait for next buzz): 's' (skip).
-        win = FakeWin(key_sequence=[-1, -1, -1, ord("a"), ord("s")])
+        win = FakeDisplay(command_sequence=[-1, -1, -1, ord("a"), ord("s")])
         ctrl = FakeCtrl([[], [], [1]])
         leds = make_leds()
         snd = make_sound()
@@ -520,7 +521,7 @@ class TestRunQuestionE2E:
     def test_skip_in_phase1_returns_empty_deltas(
         self, sample_question, team_config, no_sleep, no_draw, no_screens,
     ):
-        win = FakeWin(key_sequence=[ord("s")])
+        win = FakeDisplay(command_sequence=[ord("s")])
         ctrl = FakeCtrl([[]])
         leds = make_leds()
         snd = make_sound()
@@ -545,7 +546,7 @@ class TestRunQuestionE2E:
         # Phase 2a (wait): empty ranking stays [1], need to wait for team 2
         # Phase 2a poll: ranking becomes [1, 2] → _R_BUZZED
         # Phase 2b(team2): getch 'c' (correct)
-        win = FakeWin(key_sequence=[-1, -1, -1, ord("a"), -1, -1, ord("c")])
+        win = FakeDisplay(command_sequence=[-1, -1, -1, ord("a"), -1, -1, ord("c")])
         ctrl = FakeCtrl([[], [], [1], [1], [1], [1, 2]])
         leds = make_leds()
         snd = make_sound()
@@ -570,7 +571,7 @@ class TestRunQuestionE2E:
         # Phase 2b: 'a' (wrong, -1)
         # Phase 2a: 'r' (reset) — outer loop restarts, score_deltas cleared
         # Phase 1 again: buzz → Phase 2b: 'c' → return {1: 1}
-        win = FakeWin(key_sequence=[
+        win = FakeDisplay(command_sequence=[
             -1, -1, -1, ord("a"),  # first attempt: wrong
             ord("r"),               # reset during Phase 2a
             -1, -1, -1, ord("c"),  # second attempt: correct
@@ -596,7 +597,7 @@ class TestRunQuestionE2E:
         # Phase 1: empty polls → buzz
         # Phase 2b: getch 'r' (reset during countdown, nothing answered yet)
         # Outer loop restarts → Phase 1 again → buzz → Phase 2b: 'c' (correct)
-        win = FakeWin(key_sequence=[
+        win = FakeDisplay(command_sequence=[
             -1, -1, -1, ord("r"),   # reset during phase 2b
             -1, -1, -1, ord("c"),   # restart, correct answer
         ])
@@ -618,7 +619,7 @@ class TestRunQuestionE2E:
         """All teams answer wrong; 5s window expires; nobody got it."""
         # Phase 1: buzz team 1 → Phase 2b 'a' wrong → Phase 2a waits for team 2
         # Team 2 buzzes → Phase 2b 'b' wrong → Phase 2a times out (no more teams)
-        win = FakeWin(key_sequence=[
+        win = FakeDisplay(command_sequence=[
             -1, -1, -1, ord("a"),    # team 1 wrong
             -1, -1, ord("b"),         # team 2 wrong
         ])

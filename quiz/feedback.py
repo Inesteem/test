@@ -4,30 +4,12 @@ All full-screen game screens that display the result of a question round
 or the current standings.
 """
 
-import curses
 import logging
 import random
 import time
 
-from quiz.constants import (
-    ART_CHECK,
-    ART_CROSS,
-    ART_QUESTION,
-    BAR_EMPTY,
-    BAR_FULL,
-    LAME_TEXTS,
-    SAVAGE_TEXTS,
-)
-from quiz.drawing import (
-    animate_falling_text,
-    center_text,
-    draw_box,
-    draw_separator,
-    fill_screen,
-    team_color,
-    team_label,
-    wrap_text,
-)
+from quiz.constants import LAME_TEXTS, SAVAGE_TEXTS
+from quiz.drawing import team_color, team_label
 from quiz.insults import insult_pick, resolve_insult
 from quiz.led_show import leds_correct, leds_times_up, leds_wrong
 
@@ -49,53 +31,11 @@ def _feedback_event(correct, answer_time):
     return "wrong"
 
 
-def _draw_feedback_layout(win, pair, art, art_start, msg_row, msg,
-                          insult, insult_lines_cache=None,
-                          correct_answer="", correct=True,
-                          question_text=""):
-    """Draw the feedback screen in its canonical layout.
-
-    If insult_lines_cache is provided, use it (avoids re-wrapping).
-    Returns (insult_lines, insult_start_row) for the redraw path.
-    """
-    fill_screen(win, pair)
-    rows, cols = win.getmaxyx()
-    attr = curses.color_pair(pair) | curses.A_BOLD
-    dim_attr = curses.color_pair(pair)
-
-    for i, line in enumerate(art):
-        center_text(win, art_start + i, line, attr)
-    center_text(win, msg_row, msg, attr)
-
-    # Show the question and answer(s) below the main message
-    next_row = msg_row + 2
-    if question_text:
-        q_lines = wrap_text(question_text, min(cols - 8, 60))
-        for j, line in enumerate(q_lines):
-            center_text(win, next_row + j, line, dim_attr)
-        next_row += len(q_lines) + 1
-
-    if correct and correct_answer:
-        center_text(win, next_row, correct_answer, attr)
-
-    lines = insult_lines_cache
-    start = None
-    if insult:
-        if lines is None:
-            lines = wrap_text(f'"{insult}"', min(cols - 8, 70))
-        start = rows // 2 + 4 - len(lines) // 2
-        for j, line in enumerate(lines):
-            center_text(win, start + j, line, attr)
-
-    return lines, start
-
-
-def show_feedback(win, leds, snd, correct, name, team_config, buzzer_num,
+def show_feedback(display, leds, snd, correct, name, team_config, buzzer_num,
                   answer_time=None, insult_pack=None, insult_ai_obj=None,
                   question_text="", given_answer="", correct_answer="",
                   scores=None, game_state=None):
     """Display feedback for a team's answer — green for correct, red for wrong."""
-    pair = 1 if correct else 2
     log.info("show_feedback: correct=%s, name=%s, answer_time=%s, ai=%s, pack=%s",
              correct, name, answer_time, bool(insult_ai_obj), bool(insult_pack))
 
@@ -122,22 +62,11 @@ def show_feedback(win, leds, snd, correct, name, team_config, buzzer_num,
             scores=_score_summary(scores, team_config), team_color=color_name,
         )
 
-    art = ART_CHECK if correct else ART_CROSS
-    art_start = 2
-    msg = (f"CORRECT! +1 for {name}!" if correct
-           else f"WRONG! -1 for {name}.")
-    msg_row = art_start + len(art) + 1
-
     # Paint the art/message immediately so the player sees feedback while
-    # we block on AI resolution below. The insult will be drawn in the
-    # post-effects redraw once resolved.
-    answer_kw = dict(correct=correct)
-    if correct:
-        answer_kw.update(question_text=question_text,
-                         correct_answer=correct_answer)
-    _draw_feedback_layout(win, pair, art, art_start, msg_row, msg, "",
-                          **answer_kw)
-    win.refresh()
+    # we block on AI resolution below.
+    display.draw_feedback(correct, name,
+                          question_text=question_text,
+                          correct_answer=correct_answer)
 
     # Resolve the insult with full fallback chain:
     #   AI (with suspense music) → static pack → hardcoded pool
@@ -156,11 +85,11 @@ def show_feedback(win, leds, snd, correct, name, team_config, buzzer_num,
     if not insult and (insult_ai_obj or insult_pack):
         insult = random.choice(SAVAGE_TEXTS if correct else LAME_TEXTS)
 
-    # Now redraw with the resolved insult
-    insult_lines, _ = _draw_feedback_layout(
-        win, pair, art, art_start, msg_row, msg, insult, **answer_kw,
-    )
-    win.refresh()
+    # Redraw with the resolved insult
+    display.draw_feedback(correct, name,
+                          question_text=question_text,
+                          correct_answer=correct_answer,
+                          insult=insult)
     leds.stop()
 
     # LED + sound effects
@@ -170,7 +99,7 @@ def show_feedback(win, leds, snd, correct, name, team_config, buzzer_num,
         # SAVAGE animation only when insults are entirely off
         if (answer_time is not None and answer_time < 3.0
                 and not insult_pack and not insult_ai_obj):
-            animate_falling_text(win, random.choice(SAVAGE_TEXTS), 1)
+            display.animate_falling_text(random.choice(SAVAGE_TEXTS), "correct")
     else:
         snd.wrong()
         leds_wrong(leds)
@@ -182,95 +111,42 @@ def show_feedback(win, leds, snd, correct, name, team_config, buzzer_num,
 
     if insult_ai_obj:
         # AI mode: wait for Enter (no auto-advance)
-        _draw_feedback_layout(win, pair, art, art_start, msg_row, msg,
-                              insult, insult_lines_cache=insult_lines,
-                              **answer_kw)
-        rows, _ = win.getmaxyx()
-        center_text(win, rows - 2, "Press Enter to continue", curses.A_DIM)
-        win.refresh()
-        curses.flushinp()
-        win.nodelay(False)
-        win.getch()
+        display.draw_feedback(correct, name,
+                              question_text=question_text,
+                              correct_answer=correct_answer,
+                              insult=insult)
+        display.draw_continue_prompt()
+        display.wait_for_key()
     else:
         # Non-AI mode: 5-second auto-advance, skippable with Enter
-        curses.flushinp()
-        win.nodelay(True)
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline:
-            k = win.getch()
-            if k in (curses.KEY_ENTER, 10, 13):
-                break
-            time.sleep(0.05)
+        display.get_command(timeout=5.0)
 
     leds.off()
 
 
-def show_answer_reveal(win, leds, snd, q, title="NOBODY GOT IT!", insult=""):
+def show_answer_reveal(display, leds, snd, q, title="NOBODY GOT IT!", insult=""):
     """Show the correct answer with a dramatic yellow reveal screen."""
-    fill_screen(win, 3)
-    rows, cols = win.getmaxyx()
-
-    # Question mark art
-    art_start = rows // 2 - len(ART_QUESTION) - 4
-    for i, line in enumerate(ART_QUESTION):
-        center_text(win, art_start + i, line, curses.color_pair(3) | curses.A_BOLD)
-
-    center_text(win, rows // 2 - 3, title, curses.color_pair(3) | curses.A_BOLD)
-
-    # Insult prominent, right below the title
-    insult_height = 0
-    if insult:
-        insult_lines = wrap_text(f'"{insult}"', min(60, cols - 8))
-        for j, line in enumerate(insult_lines):
-            center_text(win, rows // 2 - 1 + j, line,
-                        curses.color_pair(3) | curses.A_BOLD)
-        insult_height = len(insult_lines)
-
-    # Repeat the question
-    q_start = rows // 2 + 1 + insult_height
-    q_lines = wrap_text(q["question"].upper(), min(60, cols - 8))
-    for j, line in enumerate(q_lines):
-        center_text(win, q_start + j, line, curses.color_pair(3))
-
-    # Show correct answer
-    answer_text = f"{q['answer'].upper()}) {q['choices'][q['answer']]}"
-    answer_row = q_start + len(q_lines) + 1
-    center_text(win, answer_row, "The answer was:", curses.color_pair(3))
-    center_text(win, answer_row + 1, answer_text, curses.color_pair(3) | curses.A_BOLD)
-
-    if insult:
-        center_text(win, rows - 2, "Press Enter to continue",
-                    curses.color_pair(3) | curses.A_DIM)
-
-    win.refresh()
+    display.draw_answer_reveal(q, title=title, insult=insult)
     leds.stop()
     leds.candle((255, 170, 40), intensity=0.5)
     snd.dramatic_sting()
 
     if insult:
-        curses.flushinp()
-        win.nodelay(False)
-        win.getch()
+        display.flush_input()
+        display.wait_for_key()
     else:
         time.sleep(5)
 
     leds.off()
 
 
-def show_timeout_screen(win, leds, snd, q, name, current_buzzer, team_config,
+def show_timeout_screen(display, leds, snd, q, name, current_buzzer, team_config,
                         insult_pack, insult_ai_obj, scores):
     """Display the TIME'S UP screen with a timeout insult."""
-    fill_screen(win, 2)
-    rows, _ = win.getmaxyx()
-    for i, line in enumerate(ART_CROSS):
-        center_text(win, rows // 2 - 4 + i, line, curses.color_pair(2) | curses.A_BOLD)
-    center_text(win, rows // 2 + 2, f"TIME'S UP! {name} ran out of time.",
-                curses.color_pair(2) | curses.A_BOLD)
-
     # Paint the timeout art/message immediately and start sound/LED effects
     # BEFORE blocking on the AI — otherwise the user sees a frozen screen
     # and hears nothing for up to 20 seconds while Claude thinks.
-    win.refresh()
+    display.draw_timeout(name)
     leds.stop()
     leds_times_up(leds)
     snd.times_up()
@@ -288,15 +164,13 @@ def show_timeout_screen(win, leds, snd, q, name, current_buzzer, team_config,
     if not insult and (insult_ai_obj or insult_pack):
         insult = random.choice(LAME_TEXTS)
     if insult:
-        center_text(win, rows // 2 + 4, f'"{insult}"',
-                    curses.color_pair(2) | curses.A_BOLD)
-        win.refresh()
+        display.draw_timeout(name, insult=insult)
 
     time.sleep(2)
     leds.off()
 
 
-def show_nobody_reveal(win, leds, snd, q, insult_pack, insult_ai_obj,
+def show_nobody_reveal(display, leds, snd, q, insult_pack, insult_ai_obj,
                        scores, team_config):
     """Show 'nobody got it' reveal — falling text insult then answer reveal.
 
@@ -322,16 +196,13 @@ def show_nobody_reveal(win, leds, snd, q, insult_pack, insult_ai_obj,
         insult = insult_pick(insult_pack, "nobody")
     if not insult:
         insult = random.choice(LAME_TEXTS)
-    animate_falling_text(win, insult, 2, duration=2.0)
-    show_answer_reveal(win, leds, snd, q, title="NOBODY GOT IT!", insult=insult)
+    display.animate_falling_text(insult, "wrong", duration=2.0)
+    show_answer_reveal(display, leds, snd, q, title="NOBODY GOT IT!", insult=insult)
 
 
-def show_scores(win, leds, snd, scores, team_config, final=False, game_state=None):
+def show_scores(display, leds, snd, scores, team_config, final=False, game_state=None):
     """Display the scoreboard between rounds or as the final reveal."""
     leds.off()
-    win.bkgd(" ", curses.color_pair(0))
-    win.clear()
-    rows, cols = win.getmaxyx()
 
     if game_state:
         game_state.update(
@@ -343,83 +214,25 @@ def show_scores(win, leds, snd, scores, team_config, final=False, game_state=Non
             scores={str(k): v for k, v in scores.items()},
         )
 
-    min_score = min(scores.values()) if scores else 0
-    max_score = max(scores.values()) if scores else 1
-    score_range = max(max_score, 1) - min(min_score, 0)
-    bar_max_width = max(5, min(30, cols // 2 - 10))
-    sorted_teams = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-
-    box_w = min(55, cols - 4)
-    box_h = len(sorted_teams) * 2 + 6
-    box_top = rows // 2 - box_h // 2
-    box_left = (cols - box_w) // 2
-    draw_box(win, box_top, box_left, box_h, box_w)
-
-    title = " FINAL SCORES " if final else " Scores "
-    center_text(win, box_top, title, curses.A_BOLD)
+    display.draw_scores(scores, team_config, final=final)
 
     if final:
         leds.candle((255, 170, 40), intensity=0.5)
         snd.dramatic_sting()
 
-    for i, (t, score) in enumerate(sorted_teams):
-        name = team_label(team_config, t)
-        row = box_top + 2 + i * 2
-        rank = i + 1
-        rank_str = f" {rank}. "
-
-        if score > 0:
-            bar_width = int((score / score_range) * bar_max_width) if score_range else 0
-            bar = BAR_FULL * bar_width + BAR_EMPTY * (bar_max_width - bar_width)
-            bar_attr = curses.color_pair(1) | curses.A_BOLD
-        elif score < 0:
-            bar_width = int((abs(score) / score_range) * bar_max_width) if score_range else 0
-            bar = BAR_FULL * bar_width + BAR_EMPTY * (bar_max_width - bar_width)
-            bar_attr = curses.color_pair(2) | curses.A_BOLD
-        else:
-            bar = BAR_EMPTY * bar_max_width
-            bar_attr = curses.A_DIM
-
-        score_str = f"+{score}" if score > 0 else str(score)
-        prefix = f"{rank_str}{name:<10} "
-        suffix = f" {score_str}"
-        base_attr = curses.A_BOLD if rank == 1 and final else 0
-
-        full_line = f"{prefix}{bar}{suffix}"
-        col = max(0, (cols - len(full_line)) // 2)
-        try:
-            win.addstr(row, col, prefix, base_attr)
-            win.addstr(row, col + len(prefix), bar, bar_attr)
-            score_attr = curses.color_pair(2) | curses.A_BOLD if score < 0 else base_attr
-            win.addstr(row, col + len(prefix) + len(bar), suffix, score_attr)
-        except curses.error:
-            pass
-
-    if final and sorted_teams:
+    if final and scores:
+        sorted_teams = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         winner = sorted_teams[0][0]
-        winner_name = team_label(team_config, winner)
         winner_clr = team_color(team_config, winner)
 
         leds.stop()
         leds.strobe(winner_clr, hz=8.0)
         time.sleep(1.0)
         leds.breathe(winner_clr, period=2.0)
-
-        draw_separator(win, box_top + box_h - 3)
-        center_text(win, box_top + box_h - 2, f"{winner_name} wins!",
-                    curses.A_BOLD | curses.A_REVERSE)
-        center_text(win, box_top + box_h + 1, "Press any key to exit", curses.A_DIM)
-    elif sorted_teams:
+    elif scores:
+        sorted_teams = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         leader = sorted_teams[0][0]
         leader_clr = team_color(team_config, leader)
         leds.breathe(leader_clr, period=3.0)
-        center_text(win, box_top + box_h + 1,
-                    "Press any key for next question", curses.A_DIM)
-    else:
-        center_text(win, box_top + box_h + 1,
-                    "Press any key to continue", curses.A_DIM)
 
-    win.refresh()
-    curses.flushinp()
-    win.nodelay(False)
-    win.getch()
+    display.wait_for_key()

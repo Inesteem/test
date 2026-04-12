@@ -84,6 +84,47 @@ class TestPickColorExhaustedPalette:
 
 # ── assign_buzzers tests ──
 
+class FakeDisplay:
+    """Fake Display for assign_buzzers tests (uses Display protocol, not curses)."""
+    def __init__(self, command_sequence=()):
+        self._commands = []
+        for item in command_sequence:
+            if item == -1:
+                self._commands.append(None)
+            elif isinstance(item, int):
+                if item == 27:
+                    self._commands.append("escape")
+                elif 0 <= item <= 255:
+                    self._commands.append(chr(item).lower())
+                else:
+                    self._commands.append(None)
+            else:
+                self._commands.append(item)
+
+    def get_command(self, timeout=0):
+        if self._commands:
+            return self._commands.pop(0)
+        return None
+
+    def wait_for_key(self):
+        if self._commands:
+            return self._commands.pop(0)
+        return "enter"
+
+    def flush_input(self): pass
+    def draw_question(self, *a, **kw): pass
+    def draw_feedback(self, *a, **kw): pass
+    def draw_scores(self, *a, **kw): pass
+    def draw_answer_reveal(self, *a, **kw): pass
+    def draw_timeout(self, *a, **kw): pass
+    def draw_waiting(self, *a, **kw): pass
+    def draw_buzzer_assign(self, *a, **kw): pass
+    def draw_ready(self, *a, **kw): pass
+    def draw_error(self, *a, **kw): pass
+    def draw_continue_prompt(self, *a, **kw): pass
+    def animate_falling_text(self, *a, **kw): pass
+
+
 TEAM_CONFIG = {
     1: {"name": "Alpha", "color": "#ff0000", "color_name": "Red"},
     2: {"name": "Beta",  "color": "#0000ff", "color_name": "Blue"},
@@ -126,7 +167,7 @@ class TestAssignBuzzers:
             [[], [2]],   # slot 1: empty then buzzer 2 pressed
             [[], [1]],   # slot 2: empty then buzzer 1 pressed
         ])
-        win = FakeWin()  # no keys → never aborts
+        win = FakeDisplay()  # no keys → never aborts
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -150,7 +191,7 @@ class TestAssignBuzzers:
             [[3]],                  # slot 1 immediately gets 3
             [[3], [3], [3, 4]],     # slot 2: stale-only twice, then new entry
         ])
-        win = FakeWin()
+        win = FakeDisplay()
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -167,7 +208,7 @@ class TestAssignBuzzers:
             [[]],  # slot 1: empty; escape fires before next poll
         ])
         # Feed escape on first getch
-        win = FakeWin(key_sequence=[27])
+        win = FakeDisplay(command_sequence=[27])
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -181,7 +222,7 @@ class TestAssignBuzzers:
         from quiz.team_setup import assign_buzzers
 
         ctrl = FakeCtrl([[[10]], [[20]]])
-        win = FakeWin()
+        win = FakeDisplay()
         leds = MagicMock()
         game_state = MagicMock()
 
@@ -208,7 +249,7 @@ class TestAssignBuzzers:
         from quiz.team_setup import assign_buzzers
 
         ctrl = FakeCtrl([[[1]], [[2]]])
-        win = FakeWin()
+        win = FakeDisplay()
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -222,7 +263,7 @@ class TestAssignBuzzers:
 
         config = {1: {"name": "Solo", "color": "#00ff00", "color_name": "Green"}}
         ctrl = FakeCtrl([[[5]]])
-        win = FakeWin()
+        win = FakeDisplay()
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -235,7 +276,7 @@ class TestAssignBuzzers:
         from quiz.team_setup import assign_buzzers
 
         ctrl = FakeCtrl([])
-        win = FakeWin()
+        win = FakeDisplay()
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -253,7 +294,7 @@ class TestAssignBuzzers:
             3: {"name": "C", "color": "#0000ff", "color_name": "Blue"},
         }
         ctrl = FakeCtrl([[[10]], [[20]], [[30]]])
-        win = FakeWin()
+        win = FakeDisplay()
         leds = MagicMock()
         game_state = MagicMock()
 
@@ -277,7 +318,7 @@ class TestAssignBuzzers:
             [[]],   # team 2: empty, then escape fires
         ])
         # Keys: -1 during team 1 polls, then escape on team 2
-        win = FakeWin(key_sequence=[-1, -1, 27])
+        win = FakeDisplay(command_sequence=[-1, -1, 27])
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -295,7 +336,7 @@ class TestAssignBuzzers:
             [[2]],  # slot 1 → buzzer 2
             [[]],   # slot 2 never pressed (escape)
         ])
-        win = FakeWin(key_sequence=[-1, 27])
+        win = FakeDisplay(command_sequence=[-1, 27])
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
@@ -307,19 +348,15 @@ class TestAssignBuzzers:
         # Both values must be unique
         assert len(set(result.values())) == len(result)
 
-    def test_nodelay_restored(self):
-        """win.nodelay(False) is called before returning."""
+    def test_returns_mapping_with_display(self):
+        """assign_buzzers works with a Display (not a curses window)."""
         from quiz.team_setup import assign_buzzers
 
         ctrl = FakeCtrl([[[1]], [[2]]])
-        win = MagicMock()
-        win.getch.return_value = -1
-        win.getmaxyx.return_value = (24, 80)
+        display = FakeDisplay()
         leds = MagicMock()
 
         with patch("quiz.team_setup.time.sleep"):
-            assign_buzzers(win, TEAM_CONFIG, ctrl, leds, game_state=None)
+            result = assign_buzzers(display, TEAM_CONFIG, ctrl, leds, game_state=None)
 
-        # Last nodelay call should be False (restore)
-        nodelay_calls = win.nodelay.call_args_list
-        assert nodelay_calls[-1] == call(False)
+        assert result == {1: 1, 2: 2}

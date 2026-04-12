@@ -12,12 +12,11 @@ All phase helpers return sentinel strings or tuples:
     ("answered", ch, answer_time)  — (phase 2b only) team submitted an answer
 """
 
-import curses
 import logging
 import time
 
 from quiz.constants import DEFAULT_ANSWER_TIMEOUT, POLL_INTERVAL
-from quiz.drawing import draw_question, team_label
+from quiz.drawing import team_label
 from quiz.feedback import (
     show_answer_reveal,
     show_feedback,
@@ -64,7 +63,7 @@ def _broadcast_state(game_state, phase, **extra):
     game_state.update(**payload)
 
 
-def _phase1_buzz_in(win, q, question_num, total, ctrl, leds, team_config, snd,
+def _phase1_buzz_in(display, q, question_num, total, ctrl, leds, team_config, snd,
                     is_last_question, game_state, scores):
     """Phase 1: wait for the first team to buzz in.
 
@@ -91,36 +90,33 @@ def _phase1_buzz_in(win, q, question_num, total, ctrl, leds, team_config, snd,
         scores=scores or {}, team_config=team_config,
     )
 
-    win.nodelay(True)
-    draw_question(win, q, question_num, total,
-                  status_line=f"{buzz_label}  (r = reset, s = skip)",
-                  is_final=is_last_question, fire_frame=fire_frame)
+    display.draw_question(q, question_num, total,
+                          status_line=f"{buzz_label}  (r = reset, s = skip)",
+                          is_final=is_last_question, fire_frame=fire_frame)
 
     try:
         while True:
-            key = win.getch()
-            if key != -1:
-                ch = chr(key).lower() if 0 <= key <= 255 else ""
-                if ch == "r":
-                    return _R_RESET
-                if ch == "s":
-                    return _R_SKIPPED
+            cmd = display.get_command()
+            if cmd == "r":
+                return _R_RESET
+            if cmd == "s":
+                return _R_SKIPPED
 
             if len(ctrl.get_ranking()) > 0:
                 return _R_BUZZED
 
             if is_last_question:
                 fire_frame += 1
-                draw_question(win, q, question_num, total,
-                              status_line=f"{buzz_label}  (r = reset, s = skip)",
-                              is_final=True, fire_frame=fire_frame)
+                display.draw_question(q, question_num, total,
+                                      status_line=f"{buzz_label}  (r = reset, s = skip)",
+                                      is_final=True, fire_frame=fire_frame)
 
             time.sleep(POLL_INTERVAL)
     finally:
         _stop_music(music)
 
 
-def _phase2_wait_for_next_buzz(win, q, question_num, total, ctrl, leds, snd,
+def _phase2_wait_for_next_buzz(display, q, question_num, total, ctrl, leds, snd,
                                team_config, turn, is_last_question, game_state):
     """Phase 2a: wait up to 5s for another team to buzz after a wrong answer.
 
@@ -128,22 +124,20 @@ def _phase2_wait_for_next_buzz(win, q, question_num, total, ctrl, leds, snd,
     """
     ranking = ctrl.get_ranking()
     _broadcast_state(game_state, "buzzing", active_team=None, time_remaining=None)
-    draw_question(win, q, question_num, total,
-                  status_line="Waiting for next buzz...  (r = reset, s = skip)",
-                  ranking_line=f"Order so far: {[team_label(team_config, b) for b in ranking]}",
-                  is_final=is_last_question, fire_frame=0)
+    display.draw_question(q, question_num, total,
+                          status_line="Waiting for next buzz...  (r = reset, s = skip)",
+                          ranking_line=f"Order so far: {[team_label(team_config, b) for b in ranking]}",
+                          is_final=is_last_question, fire_frame=0)
     leds_idle_rainbow(leds, team_config)
 
     deadline = time.monotonic() + 5
     last_tick_sec = -1
     while time.monotonic() < deadline:
-        key = win.getch()
-        if key != -1:
-            ch = chr(key).lower() if 0 <= key <= 255 else ""
-            if ch == "r":
-                return _R_RESET
-            if ch == "s":
-                return _R_SKIPPED
+        cmd = display.get_command()
+        if cmd == "r":
+            return _R_RESET
+        if cmd == "s":
+            return _R_SKIPPED
 
         if len(ctrl.get_ranking()) > turn:
             return _R_BUZZED
@@ -158,7 +152,7 @@ def _phase2_wait_for_next_buzz(win, q, question_num, total, ctrl, leds, snd,
     return _R_TIMED_OUT
 
 
-def _phase2_answer_countdown(win, q, question_num, total, ctrl, leds, snd,
+def _phase2_answer_countdown(display, q, question_num, total, ctrl, leds, snd,
                              team_config, current_buzzer, answer_timeout,
                              is_last_question, answer_source, game_state, scores):
     """Phase 2b: current buzzer-holder answers within the timeout.
@@ -181,23 +175,20 @@ def _phase2_answer_countdown(win, q, question_num, total, ctrl, leds, snd,
         scores=scores or {}, team_config=team_config,
     )
 
-    curses.flushinp()
-    win.nodelay(True)
+    display.flush_input()
 
     fire_frame = 0
     last_countdown = -1
 
     while True:
         # Game master keyboard: r/s always, a/b/c only in single-player
-        key = win.getch()
-        if key != -1:
-            ch = chr(key).lower() if 0 <= key <= 255 else ""
-            if not answer_source and ch in ("a", "b", "c"):
-                return ("answered", ch, time.monotonic() - buzz_start)
-            if ch == "s":
-                return _R_SKIPPED
-            if ch == "r":
-                return _R_RESET
+        cmd = display.get_command()
+        if not answer_source and cmd in ("a", "b", "c"):
+            return ("answered", cmd, time.monotonic() - buzz_start)
+        if cmd == "s":
+            return _R_SKIPPED
+        if cmd == "r":
+            return _R_RESET
 
         # Multi-client: poll team client for an answer
         if answer_source:
@@ -232,12 +223,12 @@ def _phase2_answer_countdown(win, q, question_num, total, ctrl, leds, snd,
                 status = f"{name}: tap answer on device  (r/s = reset/skip)  [{remaining_int}s]"
             else:
                 status = f"{name}: press A, B, or C  (r/s = reset/skip)  [{remaining_int}s]"
-            draw_question(win, q, question_num, total,
-                          status_line=status,
-                          ranking_line=f"Order: {[team_label(team_config, b) for b in ranking]}",
-                          elapsed=elapsed, timeout=answer_timeout,
-                          is_final=is_last_question, fire_frame=fire_frame,
-                          ripple_frame=ripple)
+            display.draw_question(q, question_num, total,
+                                  status_line=status,
+                                  ranking_line=f"Order: {[team_label(team_config, b) for b in ranking]}",
+                                  elapsed=elapsed, timeout=answer_timeout,
+                                  is_final=is_last_question, fire_frame=fire_frame,
+                                  ripple_frame=ripple)
 
         led_phase = leds_answer_phase(leds, team_config, current_buzzer,
                                       remaining, answer_timeout, led_phase)
@@ -245,7 +236,7 @@ def _phase2_answer_countdown(win, q, question_num, total, ctrl, leds, snd,
         time.sleep(POLL_INTERVAL)
 
 
-def run_question(win, q, question_num, total, ctrl, leds, team_config, snd,
+def run_question(display, q, question_num, total, ctrl, leds, team_config, snd,
                  answer_timeout=DEFAULT_ANSWER_TIMEOUT, is_last_question=False,
                  insult_pack=None, insult_ai_obj=None, scores=None,
                  game_state=None, answer_source=None):
@@ -261,12 +252,12 @@ def run_question(win, q, question_num, total, ctrl, leds, team_config, snd,
         turn = 0
 
         # Phase 1: initial buzz-in
-        p1 = _phase1_buzz_in(win, q, question_num, total, ctrl, leds,
+        p1 = _phase1_buzz_in(display, q, question_num, total, ctrl, leds,
                              team_config, snd, is_last_question, game_state, scores)
         if p1 == _R_RESET:
             continue
         if p1 == _R_SKIPPED:
-            show_answer_reveal(win, leds, snd, q, title="SKIPPED!")
+            show_answer_reveal(display, leds, snd, q, title="SKIPPED!")
             return score_deltas
         # p1 == _R_BUZZED — proceed to phase 2
 
@@ -280,16 +271,16 @@ def run_question(win, q, question_num, total, ctrl, leds, team_config, snd,
             # Phase 2a: wait for next buzz if we've exhausted current ranking
             if turn >= len(ranking):
                 p2a = _phase2_wait_for_next_buzz(
-                    win, q, question_num, total, ctrl, leds, snd,
+                    display, q, question_num, total, ctrl, leds, snd,
                     team_config, turn, is_last_question, game_state,
                 )
                 if p2a == _R_RESET:
                     break
                 if p2a == _R_SKIPPED:
-                    show_answer_reveal(win, leds, snd, q, title="SKIPPED!")
+                    show_answer_reveal(display, leds, snd, q, title="SKIPPED!")
                     return score_deltas
                 if p2a == _R_TIMED_OUT:
-                    show_nobody_reveal(win, leds, snd, q, insult_pack,
+                    show_nobody_reveal(display, leds, snd, q, insult_pack,
                                        insult_ai_obj, scores, team_config)
                     return score_deltas
                 # _R_BUZZED — loop back to pick up the new ranking
@@ -298,7 +289,7 @@ def run_question(win, q, question_num, total, ctrl, leds, team_config, snd,
             # Phase 2b: current team answers
             current_buzzer = ranking[turn]
             result = _phase2_answer_countdown(
-                win, q, question_num, total, ctrl, leds, snd,
+                display, q, question_num, total, ctrl, leds, snd,
                 team_config, current_buzzer, answer_timeout,
                 is_last_question, answer_source, game_state, scores,
             )
@@ -307,11 +298,11 @@ def run_question(win, q, question_num, total, ctrl, leds, team_config, snd,
                 break
             if result == _R_SKIPPED:
                 leds.off()
-                show_answer_reveal(win, leds, snd, q, title="SKIPPED!")
+                show_answer_reveal(display, leds, snd, q, title="SKIPPED!")
                 return score_deltas
             if result == _R_TIMED_OUT:
                 name = team_label(team_config, current_buzzer)
-                show_timeout_screen(win, leds, snd, q, name, current_buzzer,
+                show_timeout_screen(display, leds, snd, q, name, current_buzzer,
                                     team_config, insult_pack, insult_ai_obj, scores)
                 turn += 1
                 continue
@@ -322,7 +313,7 @@ def run_question(win, q, question_num, total, ctrl, leds, team_config, snd,
             correct = ch == q["answer"]
             given = f"{ch.upper()}) {q['choices'].get(ch, '?')}"
             correct_text = f"{q['answer'].upper()}) {q['choices'][q['answer']]}"
-            show_feedback(win, leds, snd, correct, name, team_config, current_buzzer,
+            show_feedback(display, leds, snd, correct, name, team_config, current_buzzer,
                           answer_time, insult_pack, insult_ai_obj,
                           q["question"], given, correct_text, scores,
                           game_state=game_state)

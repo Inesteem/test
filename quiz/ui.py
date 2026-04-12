@@ -21,8 +21,7 @@ import threading
 from buzzers.buzzer_remote import RemoteBuzzerController
 from leds.klopfklopf import LEDController
 from leds.stub import NoOpLEDController
-from quiz.constants import TITLE_ART
-from quiz.drawing import center_text, draw_separator
+from quiz.curses_display import CursesDisplay
 from quiz.feedback import show_scores
 from quiz.flow import run_question
 from quiz.game_master_server import start_game_master_server
@@ -54,36 +53,17 @@ def _init_color_pairs():
     curses.init_pair(5, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # fire highlight
 
 
-def _no_buzzers_error(stdscr, buzzer_url):
-    stdscr.clear()
-    stdscr.addstr(0, 0, f"No buzzers found at {buzzer_url}")
-    stdscr.addstr(1, 0, "Is buzzer_server.py running on the RPi?")
-    stdscr.addstr(3, 0, "Press any key to exit.")
-    stdscr.refresh()
-    stdscr.getch()
+def _no_buzzers_error(display, buzzer_url):
+    display.draw_error(f"No buzzers found at {buzzer_url}",
+                       "Is buzzer_server.py running on the RPi?")
+    display.wait_for_key()
 
 
-def _draw_ready_screen(stdscr, team_config, leds):
+def _draw_ready_screen(display, team_config, leds):
     """Display the title + team color list, then wait for any key."""
-    rows, _ = stdscr.getmaxyx()
-    stdscr.clear()
-
-    art_start = rows // 2 - len(TITLE_ART) - 4
-    for i, line in enumerate(TITLE_ART):
-        center_text(stdscr, art_start + i, line, curses.A_BOLD)
-
-    draw_separator(stdscr, art_start + len(TITLE_ART) + 1)
-
-    team_start = art_start + len(TITLE_ART) + 3
-    for i, (_, tc) in enumerate(team_config.items()):
-        center_text(stdscr, team_start + i,
-                    f"  {tc['name']}: {tc['color_name']}  ", curses.A_BOLD)
-
-    center_text(stdscr, team_start + len(team_config) + 2,
-                "Press any key to start", curses.A_DIM)
     leds_idle_rainbow(leds, team_config)
-    stdscr.refresh()
-    stdscr.getch()
+    display.draw_ready(team_config)
+    display.wait_for_key()
 
 
 def main(stdscr):
@@ -106,6 +86,7 @@ def main(stdscr):
             leds = NoOpLEDController()
         snd = Sound()
 
+        # Settings screen stays curses-only (inline text editing, etc.)
         config = show_settings(stdscr)
         answer_timeout = config["answer_timeout"]
         buzzer_url = config["buzzer_url"]
@@ -119,13 +100,17 @@ def main(stdscr):
                  answer_timeout, buzzer_url, len(questions),
                  bool(insult_pack), bool(insult_ai_obj), is_multi)
 
+        # Create the Display after settings (from here on, all rendering
+        # goes through the Display protocol)
+        display = CursesDisplay(stdscr)
+
         # Connect to RPi buzzer server
         ctrl = RemoteBuzzerController(buzzer_url)
         ctrl.start()
 
         buzzers_nums = ctrl.get_buzzers()
         if not buzzers_nums:
-            _no_buzzers_error(stdscr, buzzer_url)
+            _no_buzzers_error(display, buzzer_url)
             return
 
         buzzers = [(num, None) for num in buzzers_nums]
@@ -147,14 +132,14 @@ def main(stdscr):
 
         if is_multi:
             # Step 1: wait for all clients to register
-            registered = wait_for_registrations(stdscr, num_teams, game_state, leds)
+            registered = wait_for_registrations(display, num_teams, game_state, leds)
             team_urls = {num: url for num, url in registered.items()}
 
             # Step 2: wait for all teams to pick color + name
-            team_config = wait_for_team_configs(stdscr, num_teams, game_state, leds)
+            team_config = wait_for_team_configs(display, num_teams, game_state, leds)
 
             # Step 3: buzzer assignment
-            buzzer_map = assign_buzzers(stdscr, team_config, ctrl, leds, game_state)
+            buzzer_map = assign_buzzers(display, team_config, ctrl, leds, game_state)
 
             # Re-key by actual physical buzzer numbers
             team_config = {buzzer_map[slot]: cfg for slot, cfg in team_config.items()}
@@ -168,7 +153,7 @@ def main(stdscr):
             )
         else:
             team_config = setup_teams(stdscr, buzzers, leds)
-        _draw_ready_screen(stdscr, team_config, leds)
+        _draw_ready_screen(display, team_config, leds)
 
         # Quiz loop
         scores = {num: 0 for num, _ in buzzers}
@@ -177,7 +162,7 @@ def main(stdscr):
         for i, q in enumerate(questions):
             is_last = (i == total - 1)
             deltas = run_question(
-                stdscr, q, i + 1, total, ctrl, leds, team_config, snd,
+                display, q, i + 1, total, ctrl, leds, team_config, snd,
                 answer_timeout=answer_timeout,
                 is_last_question=is_last,
                 insult_pack=insult_pack,
@@ -190,10 +175,10 @@ def main(stdscr):
                 scores[buzzer_num] += delta
 
             if i < total - 1:
-                show_scores(stdscr, leds, snd, scores, team_config,
+                show_scores(display, leds, snd, scores, team_config,
                             game_state=game_state)
 
-        show_scores(stdscr, leds, snd, scores, team_config,
+        show_scores(display, leds, snd, scores, team_config,
                     final=True, game_state=game_state)
 
     except KeyboardInterrupt:

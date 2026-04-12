@@ -118,83 +118,52 @@ def setup_teams(win, buzzers, leds):
     return team_config
 
 
-def wait_for_registrations(win, num_teams, game_state, leds):
+def wait_for_registrations(display, num_teams, game_state, leds):
     """Block until num_teams clients have registered via POST /register.
 
-    Shows a curses progress screen. Returns dict {team_num: callback_url}.
+    Shows a progress screen. Returns dict {team_num: callback_url}.
     """
-    win.nodelay(True)
-
     while True:
-        key = win.getch()
-        if key == 27:  # Escape not supported here — registration is required
-            pass
+        display.get_command()  # drain input (escape not supported here)
 
         state = game_state.snapshot()
         registered = state.get("registered_clients", {})
-
-        win.bkgd(" ", curses.color_pair(0))
-        win.clear()
-        rows, cols = win.getmaxyx()
-
-        box_h = num_teams + 8
-        box_w = min(55, cols - 4)
-        box_top = max(0, rows // 2 - box_h // 2)
-        box_left = (cols - box_w) // 2
-        draw_box(win, box_top, box_left, box_h, box_w)
-
-        center_text(win, box_top + 1, " WAITING FOR CLIENTS ", curses.A_BOLD)
-        center_text(win, box_top + 2,
-                    f"Start clients with --game-master <this IP>:<port>",
-                    curses.A_DIM)
-        draw_separator(win, box_top + 3)
-
-        for i in range(1, num_teams + 1):
-            row = box_top + 5 + (i - 1)
-            if i in registered:
-                label = f"  \u2713 Team {i}: {registered[i]}  "
-                center_text(win, row, label, curses.A_BOLD)
-            else:
-                label = f"  Team {i}: waiting...  "
-                center_text(win, row, label, curses.A_DIM)
-
         n_done = len(registered)
-        status_row = box_top + box_h - 2
-        if n_done >= num_teams:
-            center_text(win, status_row,
-                        "All clients connected! Press any key.",
-                        curses.A_BOLD | curses.A_REVERSE)
-        else:
-            center_text(win, status_row,
-                        f"{n_done}/{num_teams} connected...",
-                        curses.A_DIM)
-        win.refresh()
+
+        items = []
+        for i in range(1, num_teams + 1):
+            if i in registered:
+                items.append((f"  \u2713 Team {i}: {registered[i]}  ", True))
+            else:
+                items.append((f"  Team {i}: waiting...  ", False))
 
         if n_done >= num_teams:
-            colors = [registered.get(i, "") for i in range(1, num_teams + 1)]
-            if len(colors) >= 2:
-                leds.rainbow(["#0066ff", "#ffcc00"], period=3.0)
-            elif colors:
-                leds.breathe("#0066ff")
-            win.nodelay(False)
-            win.getch()
+            status = "All clients connected! Press any key."
+        else:
+            status = f"{n_done}/{num_teams} connected..."
+
+        display.draw_waiting("WAITING FOR CLIENTS",
+                             "Start clients with --game-master <this IP>:<port>",
+                             items, status)
+
+        if n_done >= num_teams:
+            leds.rainbow(["#0066ff", "#ffcc00"], period=3.0)
+            display.wait_for_key()
             leds.stop()
             return registered
 
         time.sleep(0.2)
 
 
-def wait_for_team_configs(win, num_teams, game_state, leds):
+def wait_for_team_configs(display, num_teams, game_state, leds):
     """Block until all registered teams have submitted name+color config.
 
     Returns team_config dict: {team_num: {name, color, color_name}}.
     Escape falls back to defaults for unconfigured teams.
     """
-    win.nodelay(True)
-
     while True:
-        key = win.getch()
-        if key == 27:
+        cmd = display.get_command()
+        if cmd == "escape":
             state = game_state.snapshot()
             configs = state.get("team_configs", {})
             for i in range(1, num_teams + 1):
@@ -207,49 +176,28 @@ def wait_for_team_configs(win, num_teams, game_state, leds):
                     }
                     log.info("Team %d defaulted (escape pressed)", i)
             leds.stop()
-            win.nodelay(False)
             return configs
 
         state = game_state.snapshot()
         configs = state.get("team_configs", {})
+        n_done = len(configs)
 
-        win.bkgd(" ", curses.color_pair(0))
-        win.clear()
-        rows, cols = win.getmaxyx()
-
-        box_h = num_teams * 2 + 8
-        box_w = min(55, cols - 4)
-        box_top = max(0, rows // 2 - box_h // 2)
-        box_left = (cols - box_w) // 2
-        draw_box(win, box_top, box_left, box_h, box_w)
-
-        center_text(win, box_top + 1, " WAITING FOR TEAMS ", curses.A_BOLD)
-        center_text(win, box_top + 2,
-                    "Teams pick name & color on their devices  (Esc = defaults)",
-                    curses.A_DIM)
-        draw_separator(win, box_top + 3)
-
+        items = []
         for i in range(1, num_teams + 1):
-            row = box_top + 5 + (i - 1) * 2
             if i in configs:
                 tc = configs[i]
-                label = f"  Team {i}: {tc['name']} ({tc.get('color_name', '')})  "
-                center_text(win, row, label, curses.A_BOLD)
+                items.append((f"  Team {i}: {tc['name']} ({tc.get('color_name', '')})  ", True))
             else:
-                label = f"  Team {i}: picking...  "
-                center_text(win, row, label, curses.A_DIM)
+                items.append((f"  Team {i}: picking...  ", False))
 
-        n_done = len(configs)
-        status_row = box_top + 5 + num_teams * 2 + 1
         if n_done >= num_teams:
-            center_text(win, status_row,
-                        "All teams ready! Press any key to continue.",
-                        curses.A_BOLD | curses.A_REVERSE)
+            status = "All teams ready! Press any key to continue."
         else:
-            center_text(win, status_row,
-                        f"{n_done}/{num_teams} configured...",
-                        curses.A_DIM)
-        win.refresh()
+            status = f"{n_done}/{num_teams} configured..."
+
+        display.draw_waiting("WAITING FOR TEAMS",
+                             "Teams pick name & color on their devices  (Esc = defaults)",
+                             items, status)
 
         if n_done >= num_teams:
             colors = [tc["color"] for tc in configs.values()]
@@ -257,8 +205,7 @@ def wait_for_team_configs(win, num_teams, game_state, leds):
                 leds.rainbow(colors, period=3.0)
             elif colors:
                 leds.breathe(colors[0])
-            win.nodelay(False)
-            win.getch()
+            display.wait_for_key()
             leds.stop()
             return configs
 
@@ -285,7 +232,7 @@ def _broadcast_assign_state(game_state, slot_num, name, assigned, team_config):
     )
 
 
-def assign_buzzers(win, team_config, ctrl, leds, game_state):
+def assign_buzzers(display, team_config, ctrl, leds, game_state):
     """Ask each team to press their buzzer. Returns {slot_num: actual_buzzer_num}.
 
     For each team in order:
@@ -295,8 +242,8 @@ def assign_buzzers(win, team_config, ctrl, leds, game_state):
     4. Record mapping, flash team color on LEDs
 
     Args:
-        win: curses window
-        team_config: {slot_num: {name, color, color_name}} from poll_remote_team_configs
+        display: Display protocol instance
+        team_config: {slot_num: {name, color, color_name}} from wait_for_team_configs
         ctrl: RemoteBuzzerController instance
         leds: LED controller
         game_state: GameState instance (for broadcasting to clients), can be None
@@ -308,7 +255,12 @@ def assign_buzzers(win, team_config, ctrl, leds, game_state):
     assigned_buzzers = set()  # set of actual buzzer nums already claimed
     slots = sorted(team_config.keys())
 
-    win.nodelay(True)
+    # Build the {slot: {name, color, buzzer_num}} dict for display
+    def _assigned_info():
+        return {s: {"name": team_config[s]["name"],
+                     "color": team_config[s]["color"],
+                     "buzzer_num": assigned[s]}
+                for s in assigned}
 
     for slot_num in slots:
         name = team_config[slot_num]["name"]
@@ -320,42 +272,13 @@ def assign_buzzers(win, team_config, ctrl, leds, game_state):
 
         aborted = False
         while True:
-            key = win.getch()
-            if key == 27:  # Escape — fall back to identity mapping
+            cmd = display.get_command()
+            if cmd == "escape":
                 log.info("assign_buzzers: aborted by Escape key")
                 aborted = True
                 break
 
-            # Draw assignment screen
-            win.bkgd(" ", curses.color_pair(0))
-            win.clear()
-            rows, cols = win.getmaxyx()
-
-            box_h = len(slots) + 8
-            box_w = min(55, cols - 4)
-            box_top = max(0, rows // 2 - box_h // 2)
-            box_left = (cols - box_w) // 2
-            draw_box(win, box_top, box_left, box_h, box_w)
-
-            center_text(win, box_top + 1, " BUZZER ASSIGNMENT ", curses.A_BOLD)
-            center_text(win, box_top + 2, "Each team: press your physical buzzer!",
-                        curses.A_DIM)
-            draw_separator(win, box_top + 3)
-
-            for i, s in enumerate(slots):
-                row = box_top + 5 + i
-                if s in assigned:
-                    label = f"  \u2713 {team_config[s]['name']} (buzzer {assigned[s]})  "
-                    center_text(win, row, label, curses.A_BOLD)
-                elif s == slot_num:
-                    label = f"  >> {name}: press your buzzer!  "
-                    center_text(win, row, label, curses.A_BOLD | curses.A_REVERSE)
-                else:
-                    label = f"  {team_config[s]['name']}: waiting...  "
-                    center_text(win, row, label, curses.A_DIM)
-
-            center_text(win, box_top + box_h - 2, "Esc = skip assignment", curses.A_DIM)
-            win.refresh()
+            display.draw_buzzer_assign(name, color, _assigned_info(), team_config)
 
             # Check all ranking entries — not just [0] — so a stale
             # buzzer that re-registers after reset doesn't block us.
@@ -393,8 +316,6 @@ def assign_buzzers(win, team_config, ctrl, leds, game_state):
             assigned[slot_num] = fallback
             assigned_buzzers.add(fallback)
             log.info("assign_buzzers: slot %d -> %d (fallback)", slot_num, fallback)
-
-    win.nodelay(False)
 
     if game_state is not None:
         game_state.update(phase="idle", assign_team=None,
