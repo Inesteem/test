@@ -387,9 +387,8 @@ function resetToSetup() {
 
 function quitApp() {
   if (confirm('Quit the app?')) {
-    fetch('/quit', {method:'POST'}).then(() => {
-      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#666;font-size:1.5em;">App stopped.</div>';
-    });
+    fetch('/quit', {method:'POST'});
+    window.close();
   }
 }
 
@@ -597,8 +596,14 @@ class TeamClientHandler(BaseHTTPRequestHandler):
         if self.path == "/quit":
             self._send(200, '{"ok":true}', "application/json")
             log.info("Quit requested via UI")
-            threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)),
-                             daemon=True).start()
+            def _shutdown():
+                time.sleep(0.3)
+                # Kill kiosk browser first, then exit
+                import subprocess
+                subprocess.run(["pkill", "-f", "chromium"], capture_output=True)
+                time.sleep(0.2)
+                os._exit(0)
+            threading.Thread(target=_shutdown, daemon=True).start()
         elif self.path == "/reset":
             with _answer_lock:
                 _current_answer = None
