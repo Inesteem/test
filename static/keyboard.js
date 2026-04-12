@@ -83,7 +83,7 @@
     function showKeyboard(input) {
         activeInput = input;
         kbd.setInput(input.value);
-        kbd.setOptions({ layoutName: 'default' });
+        kbd.setOptions({ layoutName: input.type === 'number' ? 'numbers' : 'default' });
         kbdWrap.classList.remove('hidden');
         document.body.classList.add('kbd-open');
         setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
@@ -96,7 +96,7 @@
         activeInput = null;
     }
 
-    document.querySelectorAll('input[type="text"]').forEach(input => {
+    document.querySelectorAll('input[type="text"], input[type="number"]').forEach(input => {
         input.addEventListener('focus', () => showKeyboard(input));
         input.setAttribute('inputmode', 'none');
     });
