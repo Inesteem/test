@@ -847,13 +847,15 @@ def main():
         from leds.stub import NoOpLEDController
         leds = NoOpLEDController()
 
-    # Start HTTP server first so callback URL is reachable
+    # Start HTTP server immediately so the page loads while waiting for master
     server = ReusableThreadingHTTPServer(("0.0.0.0", args.port), TeamClientHandler)
     local_ip = _detect_lan_ip()
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
     print(f"Team client running on http://{local_ip}:{args.port}")
     print(f"Game master: {_game_master_url}")
 
-    # Register with game master to get team number
+    # Register with game master to get team number (retries until master is up)
     print("Registering with game master...")
     _register_with_master(_game_master_url, local_ip, args.port)
     print(f"Registered as Team {_team_num}")
@@ -863,7 +865,7 @@ def main():
     led_runner.start()
 
     try:
-        server.serve_forever()
+        server_thread.join()
     except KeyboardInterrupt:
         print("\nShutting down.")
     finally:
