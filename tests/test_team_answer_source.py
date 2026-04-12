@@ -83,10 +83,12 @@ class TestTeamAnswerSource:
         assert src.poll_once(1) is None
 
     def test_reset_clears_server_answer(self, fake_client):
+        import time
         server, url = fake_client
         server.state["answer"] = "c"
         src = TeamAnswerSource({1: url})
         src.reset(1)
+        time.sleep(0.3)  # reset is async (fire-and-forget)
         assert server.state["answer"] is None
         assert server.state["reset_count"] == 1
 

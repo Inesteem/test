@@ -5,6 +5,7 @@ Drop-in replacement for keyboard A/B/C input in multi-client mode.
 
 import json
 import logging
+import threading
 import urllib.request
 import urllib.error
 
@@ -23,16 +24,24 @@ class TeamAnswerSource:
         self._urls = {k: v.rstrip("/") for k, v in team_urls.items()}
 
     def reset(self, buzzer_num):
-        """Tell the team client to clear its stored answer."""
+        """Tell the team client to clear its stored answer (fire-and-forget).
+
+        Runs in a background thread so a slow/unreachable client doesn't
+        block the game master's countdown loop.
+        """
         url = self._urls.get(buzzer_num)
         if not url:
             return
+        threading.Thread(target=self._do_reset, args=(buzzer_num, url),
+                         daemon=True).start()
+
+    def _do_reset(self, buzzer_num, url):
         try:
             req = urllib.request.Request(
                 f"{url}/reset", method="POST",
                 data=b"", headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=1):
+            with urllib.request.urlopen(req, timeout=0.5):
                 pass
             log.debug("Reset team %d at %s", buzzer_num, url)
         except (urllib.error.URLError, OSError) as e:
