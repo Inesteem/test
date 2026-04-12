@@ -1,8 +1,6 @@
-> **⚠ Archived — historical snapshot.** This document was written for the original hackathon and is frozen at that point. For current project state, see the [root README](../README.md).
-
 # Team 1: Buzzers
 
-You own the physical buzzer input pipeline. Two deliverables: a server that runs on the Raspberry Pi and reads buzzer presses, and a client library that the game UI (Team 3) will import.
+You own the physical buzzer input pipeline. Two deliverables: a server that runs on the Raspberry Pi and reads buzzer presses, and a client library that the game engine imports.
 
 ## The Problem
 

@@ -1,8 +1,6 @@
-> **⚠ Archived — historical snapshot.** This document was written for the original hackathon and is frozen at that point. For current project state, see the [root README](../README.md).
-
 # Interface Contracts
 
-These are the agreed APIs between all three teams. Code against these, not against each other's implementations. Build mocks/stubs of the interfaces you consume so you can develop independently.
+These are the agreed APIs between all modules. Code against these, not against each other's implementations. Build mocks/stubs of the interfaces you consume so you can develop independently.
 
 ## File Structure
 
@@ -13,11 +11,25 @@ buzzers/
   buzzer_remote.py     -- Team 1: laptop-side client
 leds/
   klopfklopf.py        -- Team 2: LED controller
+  stub.py              -- No-op LED stub (for when hardware is absent)
 sound/
   sound.py             -- Team 2: procedural audio engine
 quiz/
-  ui.py                -- Team 3: game UI
-  questions.py         -- Team 3: question bank
+  display.py           -- Display protocol (abstract interface)
+  web_display.py       -- WebDisplay (browser via SSE)
+  curses_display.py    -- CursesDisplay (terminal, deprecated)
+  web_ui.py            -- Web entry point
+  ui.py                -- Curses entry point (deprecated)
+  flow.py              -- Game state machine
+  feedback.py          -- Feedback/reveal/score screens
+  game_master_server.py -- HTTP server + SSE
+  game_state.py        -- Thread-safe shared state
+  team_setup.py        -- Registration, config, buzzer assignment
+  team_answer_source.py -- Polls team clients
+  questions.py         -- Question bank
+static/
+  gm.html             -- Browser game master display
+team_client.py         -- Team device client + web UI
 ```
 
 ## Import Paths
@@ -25,13 +37,16 @@ quiz/
 ```python
 from buzzers.buzzer_remote import RemoteBuzzerController
 from leds.klopfklopf import LEDController
+from leds.stub import NoOpLEDController
 from sound.sound import Sound
 from quiz.questions import QUESTIONS
+from quiz.web_display import WebDisplay
+from quiz.curses_display import CursesDisplay
 ```
 
 ---
 
-## Buzzer Controller (Team 1 produces, Team 3 consumes)
+## Buzzer Controller (Team 1 produces, Game Engine consumes)
 
 ### HTTP Server (runs on RPi)
 
@@ -62,7 +77,7 @@ class RemoteBuzzerController:
 
 ---
 
-## LED Controller (Team 2 produces, Team 3 consumes)
+## LED Controller (Team 2 produces, Game Engine + Team Client consume)
 
 ```python
 class LEDController:
@@ -87,10 +102,11 @@ class LEDController:
 - Calling any mode automatically stops the previous animation
 - `stop()` halts the animation but keeps the last color showing
 - `off()` is shorthand for `set_color((0, 0, 0))`
+- `NoOpLEDController` (`leds/stub.py`) is a drop-in stub when hardware is absent -- all methods are no-ops
 
 ---
 
-## Sound Engine (Team 2 produces, Team 3 consumes)
+## Sound Engine (Team 2 produces, Game Engine consumes)
 
 ```python
 class Sound:
@@ -104,6 +120,7 @@ class Sound:
     def times_up(self, **kw) -> PlaybackHandle | None: ...
     def dramatic_sting(self, **kw) -> PlaybackHandle | None: ...
     def tick(self, **kw) -> PlaybackHandle | None: ...
+    def suspense(self, **kw) -> PlaybackHandle | None: ...
 
 class PlaybackHandle:
     def stop(self) -> None: ...
@@ -114,6 +131,72 @@ class PlaybackHandle:
 - `background=False` (default): blocks until the sound finishes
 - `background=True`: returns a `PlaybackHandle` immediately; call `.stop()` to cut it short
 - All convenience methods (`correct`, `wrong`, etc.) pass `**kw` through to `play()`
+- Sound plays via `sox` on the game master machine -- the browser does NOT play sound
+
+---
+
+## Display Protocol (Game Engine produces, Display Backend consumes)
+
+```python
+class Display(Protocol):
+    # Rendering (push screen state)
+    def draw_question(self, q, question_num, total, *, status_line="", ranking_line="",
+                      elapsed=None, timeout=None, is_final=False, fire_frame=0,
+                      ripple_frame=-1) -> None: ...
+    def draw_feedback(self, correct, team_name, *, question_text="",
+                      correct_answer="", insult="") -> None: ...
+    def draw_continue_prompt(self, text="Press Enter to continue") -> None: ...
+    def draw_answer_reveal(self, q, *, title="", insult="") -> None: ...
+    def draw_timeout(self, team_name, *, insult="") -> None: ...
+    def draw_scores(self, scores, team_config, *, final=False) -> None: ...
+    def animate_falling_text(self, text, style, duration=1.5) -> None: ...
+    def draw_ready(self, team_config) -> None: ...
+    def draw_waiting(self, title, subtitle, items, status) -> None: ...
+    def draw_buzzer_assign(self, current_name, current_color, assigned, team_config) -> None: ...
+    def draw_error(self, message, detail="") -> None: ...
+
+    # Input (read commands from game master)
+    def get_command(self, timeout=0) -> str | None: ...
+    def wait_for_key(self) -> str | None: ...
+    def flush_input(self) -> None: ...
+```
+
+- `draw_*` methods are pure rendering -- they push a screen state and return immediately
+- `animate_falling_text` is the exception: it blocks for `duration` seconds
+- `get_command(timeout=0)` is non-blocking; `get_command(timeout=5.0)` blocks up to 5s
+- `wait_for_key()` blocks until any key/command is received
+- Commands are strings: `"a"`, `"b"`, `"c"`, `"r"`, `"s"`, `"enter"`, `"escape"`, `"up"`, `"down"`, `"left"`, `"right"`, `"space"`, or `None`
+
+---
+
+## Game Master HTTP Server
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/state` | Current game state JSON (polled by team clients) |
+| `POST` | `/register` | Register a team client, returns `{team_num}` |
+| `POST` | `/team_config` | Submit team name+color (validated for uniqueness) |
+| `GET` | `/gm` | Serve the browser game master UI (gm.html) |
+| `GET` | `/gm/events` | SSE stream -- pushes WebDisplay screen state |
+| `POST` | `/gm/command` | Receive keyboard command from browser GM: `{cmd: "a"}` |
+| `GET` | `/gm/static/*` | Static files from the `static/` directory |
+
+---
+
+## Team Client HTTP Server
+
+Each team device runs `team_client.py` which serves a web UI and exposes endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Serve the team web UI (setup → game) |
+| `GET` | `/answer` | Current answer (`{answer: "a"}` or `{answer: null}`) |
+| `POST` | `/submit` | Team submits answer: `{answer: "a"}` |
+| `POST` | `/reset` | Clear stored answer (called by GM between rounds) |
+| `GET` | `/team_config` | Current team config (polled by GM during setup) |
+| `POST` | `/team_config` | Submit name+color (forwarded to GM for validation) |
+| `GET` | `/client_info` | Team number, config status |
+| `GET` | `/proxy/state` | Proxies GM `/state` to the browser |
 
 ---
 
@@ -125,6 +208,7 @@ QUESTIONS = [
         "question": "What does the B in B-tree stand for?",
         "choices": {"a": "Binary", "b": "Balanced", "c": "Nobody knows for sure"},
         "answer": "c",
+        "difficulty": 7,
     },
     ...
 ]
@@ -132,4 +216,5 @@ QUESTIONS = [
 
 - Each question has exactly 3 choices keyed `"a"`, `"b"`, `"c"`
 - `answer` is one of `"a"`, `"b"`, `"c"`
+- `difficulty` (1-10) is optional, defaults to 5; the hardest question is always saved for last
 - Aim for 15-25 questions, fun mix of CS trivia, tech culture, and gotcha questions

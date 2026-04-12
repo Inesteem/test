@@ -1,12 +1,62 @@
-> **⚠ Archived — historical snapshot.** This document was written for the original hackathon and is frozen at that point. For current project state, see the [root README](../README.md).
-
 # Team 3: Game UI
 
-You own the game itself -- a full-screen terminal application that ties together the buzzers, LEDs, and sounds into a multiplayer quiz experience.
+You own the game itself -- the display, the game loop, and the quiz experience. The game master runs it on a laptop; the audience sees it on a projector via a browser in Chrome kiosk mode.
 
 ## The Challenge
 
-Build a curses-based terminal UI that a game master runs on a laptop (ideally connected to a projector). The game master controls the flow with the keyboard. Players interact by pressing physical buzzers.
+Build a browser-based game master display that runs in Chrome kiosk mode on a projector. The game engine runs in Python and pushes state to the browser via Server-Sent Events (SSE). The game master controls the flow with keyboard shortcuts. Teams interact via their own devices (phones/laptops running `team_client.py`).
+
+**Why browser instead of terminal?** A curses terminal looks crude on a projector -- limited colors, fixed-width text, no smooth animations. A browser gives you full CSS animations, team-colored UI, responsive layout, and a professional quiz-show feel. The game engine stays in Python (sound and LEDs are local hardware), but the rendering moves to HTML/CSS/JS.
+
+## Architecture
+
+```
+Python game server (quiz/web_ui.py)
+  ├── Game engine (flow.py, feedback.py)
+  ├── Sound (sox) -- plays on GM laptop speakers
+  ├── LEDs (USB) -- drives GM laptop LED strip
+  └── HTTP server (game_master_server.py)
+       ├── GET /gm           -- serves gm.html
+       ├── GET /gm/events    -- SSE stream (screen state push)
+       ├── POST /gm/command  -- keyboard commands from browser
+       ├── GET /state         -- game state for team clients
+       ├── POST /register     -- client registration
+       └── POST /team_config  -- team name/color submission
+
+Chrome kiosk (static/gm.html)
+  ├── EventSource('/gm/events') -- receives screen state
+  ├── POST /gm/command          -- sends keyboard events
+  └── Renders: question, feedback, scores, timer, fire effects
+```
+
+### The Display Protocol
+
+The game engine never touches the browser directly. It calls methods on a `Display` protocol:
+
+```python
+class Display(Protocol):
+    def draw_question(self, q, question_num, total, *, status_line, elapsed, timeout, is_final, ...): ...
+    def draw_feedback(self, correct, team_name, *, insult, question_text, correct_answer): ...
+    def draw_scores(self, scores, team_config, *, final): ...
+    def draw_answer_reveal(self, q, *, title, insult): ...
+    def draw_timeout(self, team_name, *, insult): ...
+    def animate_falling_text(self, text, style, duration): ...
+    def draw_ready(self, team_config): ...
+    def draw_waiting(self, title, subtitle, items, status): ...
+    def get_command(self, timeout=0) -> str | None: ...
+    def wait_for_key(self) -> str | None: ...
+    def flush_input(self): ...
+```
+
+`WebDisplay` implements this by pushing JSON state dicts over SSE and reading commands from a queue fed by `POST /gm/command`.
+
+Each `draw_*` method serializes screen state as JSON and pushes it to connected browsers. The browser renders based on the `screen` field:
+
+```json
+{"screen": "question", "question": "What is 2+2?", "choices": {"a": "3", "b": "4", "c": "5"}, ...}
+{"screen": "feedback", "correct": true, "team_name": "Foxes", "insult": "Even a clock is right twice a day", ...}
+{"screen": "scores", "scores": {"1": 3, "2": -1}, "team_config": {...}, "final": false}
+```
 
 ## What You Consume
 
@@ -21,75 +71,84 @@ from sound.sound import Sound
 Simple mocks to get you started:
 
 - `RemoteBuzzerController`: hardcode `get_buzzers()` returning `[1, 2]`, have `get_ranking()` return a list you can manipulate with keyboard input
-- `LEDController`: print to stderr or just no-op
-- `Sound`: print the sound name or just no-op
+- `LEDController`: use `NoOpLEDController` from `leds/stub.py` (already exists)
+- `Sound`: mock with `MagicMock()` or just print the sound name
 
 ## What You Need to Build
 
-### Settings Screen
+### Game Engine (Python)
 
-A configuration screen at startup where the game master can set:
+The game engine runs the question loop and orchestrates sound + LEDs:
 
-- RPi address and port (so Team 1's server can be found)
-- Answer timeout (how many seconds a team has to answer after buzzing in)
+1. **Wait for buzz-in**: poll `ctrl.get_ranking()`, play background music, animate LEDs
+2. **Answer countdown**: the buzzed team has N seconds to answer (via their device or GM keyboard)
+3. **Feedback**: correct/wrong/timeout -- play sound, flash LEDs, resolve insult, push to display
+4. **Scores**: between rounds and final reveal
 
-### Team Setup
+The engine calls `display.draw_*()` for rendering and `display.get_command()` for input. It never touches HTML or the browser directly.
 
-Each buzzer team picks a color from a palette. The selected color should be shown on the LEDs as feedback during selection.
+### Browser Display (HTML/CSS/JS)
 
-### Question Loop
+A single-page app (`static/gm.html`) that connects via SSE and renders each screen type. Design for a projector:
 
-For each question:
+- **Large text** (2-3em for questions, 4em+ for feedback)
+- **High contrast** (dark background, bold white text)
+- **Team colors** everywhere (progress bars, score bars, feedback backgrounds)
+- **CSS animations** instead of frame-by-frame updates:
+  - Progress bar: `requestAnimationFrame` loop driven by `elapsed`/`timeout`, re-syncs on each SSE message
+  - Fire border for final question: CSS `@keyframes`
+  - Falling text: CSS drop animation
+  - Score bars: CSS `width` transition
+- **Keyboard capture**: `document.addEventListener('keydown', ...)` sends `POST /gm/command` with `{cmd: "a"}` etc.
 
-1. **Display** the question and three choices (A/B/C) on screen
-2. **Buzz-in phase**: animate LEDs while polling `get_ranking()` for the first press
-3. **Answer phase**: the buzzed-in team's name is highlighted; game master presses A, B, or C on the keyboard
-4. **Feedback**: correct/wrong/timeout -- show it visually, play the sound, light the LEDs
-5. If wrong, the next team in buzz order gets a turn (until all teams have tried or someone gets it right)
-6. The game master can press `R` at any time to reset buzzers and re-do the current question
+Screen types to handle:
 
-### Sound + LED Choreography
+| Screen | Data | Visual |
+|--------|------|--------|
+| `question` | question text, choices, elapsed/timeout, is_final | Centered card, A/B/C pills, progress bar, fire border on final |
+| `feedback` | correct/wrong, team_name, insult, question_text | Full-screen green/red, large check/X, insult text |
+| `answer_reveal` | question, correct answer, title, insult | Yellow screen, "The answer was: ..." |
+| `timeout` | team_name, insult | Red screen, "TIME'S UP!" |
+| `scores` | scores dict, team_config, final flag | Horizontal bar chart with team colors, winner highlight |
+| `falling_text` | text, style, duration | Text drops from top to center (CSS animation) |
+| `ready` | team_config | Title + team name/color list, "Press any key" |
+| `waiting` | title, subtitle, items, status | Registration/config progress screen |
+| `buzzer_assign` | current_name, assigned teams | "Press your buzzer!" prompt |
 
-Think about how to use LEDs and sound to build atmosphere:
+### Multi-client Infrastructure
 
-- What plays/shows during the thinking time?
-- How do you build tension as the timer counts down?
-- What makes a correct answer feel like a celebration?
-- What makes a timeout feel dramatic?
+Teams connect from their own devices. The flow:
 
-The LED controller has multiple animation modes (rainbow, pulse, strobe, breathe, candle) -- use them to tell a story across the game phases. The sound engine has background music (jeopardy, final countdown) that should play during the answer countdown and stop when someone answers.
-
-### Score Tracking
-
-Show scores between rounds. Make the final scoreboard dramatic -- this is the climax of the game.
+1. Client runs `team_client.py` → registers with `POST /register` → gets `team_num`
+2. Client shows color/name picker → submits `POST /team_config` with `{team_num, name, color}`
+3. Game master waits for all teams, shows progress on display
+4. Buzzer assignment: each team presses their physical buzzer
+5. Game starts: clients poll `GET /state`, show A/B/C buttons when it's their turn
 
 ### Question Bank
 
-Write 15-25 quiz questions. Each has a question string, three choices (a/b/c), and a correct answer. Make them fun for the audience:
+Write 15-25 quiz questions. Each has a question string, three choices (a/b/c), and a correct answer. Make them fun:
 
 - CS/algorithms trivia (the kind that sparks debate)
-- Google culture / tech industry lore
+- Tech industry lore
 - Programming language gotchas
 - "Gotcha" questions where the obvious answer is wrong
 - Pop culture meets tech
 
-The wrong answers should be plausible enough to cause arguments.
-
 ## Things to Think About
 
-- `curses.wrapper(main)` handles init/cleanup for you
-- `win.nodelay(True)` for non-blocking keyboard reads (returns -1 if no key)
-- `curses.init_pair()` for color pairs, `curses.color_pair()` to use them
-- Unicode box-drawing characters (`═`, `║`, `╔`, `╗`, etc.) make the UI look polished
-- Poll the buzzer controller every ~100ms -- human reaction time makes this perfectly adequate
-- The question text should be visually prominent (bold, highlighted, padded)
-- Answer choices need breathing room -- don't cram them together
-- A progress bar for the countdown timer adds urgency
+- SSE reconnection: the browser should auto-reconnect and get the current screen state on connect
+- Sound must come from the game master laptop (sox), not the browser -- keep sound calls in Python
+- The progress bar should animate smoothly at 60fps in the browser, not depend on 100ms SSE updates
+- The `wait_for_key()` call blocks the Python game thread -- the browser must send a command to unblock it
+- Use `time.sleep()` for timing in Python; use `requestAnimationFrame` for animation in the browser
+- Keep the browser app self-contained in one HTML file (inline CSS + JS) for easy deployment
 
 ## Stretch Goals
 
-- Team name editing (not just "Team 1", "Team 2")
-- Animated title screen
-- Question categories or difficulty levels
-- A "sudden death" final round
-- Graceful degradation if LEDs or sound are unavailable (catch errors, run without them)
+- Animated SVG check/cross instead of text
+- Confetti particle effect on winner reveal
+- Sound effects from the browser via Web Audio (in addition to sox)
+- An on-screen control panel for touch devices (large R/S/Enter buttons)
+- OBS overlay mode (transparent background, just the question/timer)
+- Mobile spectator view at a separate URL

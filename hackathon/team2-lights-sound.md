@@ -1,8 +1,8 @@
-> **⚠ Archived — historical snapshot.** This document was written for the original hackathon and is frozen at that point. For current project state, see the [root README](../README.md).
-
 # Team 2: Lights + Sound
 
 You own the output peripherals -- the RGB LED strip and the procedural sound engine. Two independent sub-deliverables that can be split within your team.
+
+Note: LED strips can also be attached to team client devices (phones/laptops) for per-team visual feedback. The `LEDController` class is used by both the game master and each team client. A `NoOpLEDController` stub (`leds/stub.py`) is the drop-in for when hardware isn't present.
 
 ## Part A: LED Strip
 
