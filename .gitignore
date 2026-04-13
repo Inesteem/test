@@ -4,3 +4,4 @@ quiz.log
 .coverage
 htmlcov/
 .team_ips.json
+credentials
