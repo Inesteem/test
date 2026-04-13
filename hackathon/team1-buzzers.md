@@ -1,55 +1,32 @@
 # Team 1: Buzzers
 
-You own the physical buzzer input pipeline. Two deliverables: a server that runs on the Raspberry Pi and reads buzzer presses, and a client library that the game engine imports.
+You own the physical buzzer input. Two deliverables: a server on the Raspberry Pi that detects buzzer presses, and a client that the game engine uses to read them.
 
 ## The Problem
 
-The buzzers are USB devices that show up as Linux keyboard input devices. When someone presses a buzzer, it fires a keypress event. You need to:
-
-1. Detect all connected buzzers
-2. Listen for presses in the background
-3. Track the order in which buzzers were pressed (the "ranking")
-4. Serve this state over the network so the game laptop can read it
-5. Support resetting the ranking between questions
+The buzzers are USB devices plugged into the RPi. When someone presses a buzzer, you need to detect it, track the press order across all buzzers, and make that data available to the game master laptop over the network.
 
 ## What You Know
 
-- The buzzers have vendor ID `0x2341` and product ID `0xC036`
-- They present as keyboard devices and send `KEY_K` on press
-- The `evdev` Python library reads Linux input devices
-- There may be two (or more) buzzers plugged in simultaneously -- they're identical devices, so you need stable enumeration (hint: the physical USB path helps)
-- The RPi is on the same WiFi as the game laptop
+- There are 3 buzzers, all identical USB devices
+- Vendor ID `0x2341`, Product ID `0xC036`
+- They present as keyboard-like input devices
+- The RPi is on the same network as the game laptop
 
 ## What You Need to Build
 
-### On the RPi: HTTP Server
+1. **RPi server** -- detect buzzer presses, track press order ("ranking"), serve it over HTTP. Support resetting the ranking between questions. See `contracts.md` for the API.
 
-A lightweight HTTP server (stdlib `http.server` is fine) that exposes two endpoints:
-
-- `GET /` -- returns the current buzzer state as JSON
-- `POST /reset` -- clears the ranking for a new question
-
-See `contracts.md` for the exact JSON shapes.
-
-The server should start the buzzer listener in a background thread when it boots, and serve HTTP requests on the main thread.
-
-### On the Laptop: Client Library
-
-A `RemoteBuzzerController` class that Team 3 will import. It wraps HTTP calls to your server behind a clean Python interface.
-
-See `contracts.md` for the exact class interface.
-
-Key requirement: **never crash on network errors.** If the RPi is unreachable, return empty results. The game should degrade gracefully, not explode.
+2. **Laptop client** -- a clean interface the game engine imports to poll buzzer state. Must handle network errors gracefully (never crash, return safe defaults).
 
 ## Things to Think About
 
-- Thread safety: the HTTP handler and the buzzer listener run concurrently
-- Draining: when you reset, old buffered events should be discarded
-- What happens if a buzzer is unplugged mid-game?
-- The server should bind to `0.0.0.0` so it's reachable from the WiFi network
+- Multiple buzzers are identical -- how do you tell them apart reliably?
+- Thread safety between the input listener and HTTP handler
+- What happens to buffered events when you reset?
+- The server needs to be reachable from the network, not just localhost
 
 ## Stretch Goals
 
-- WebSocket or Server-Sent Events instead of polling
-- Auto-discovery via mDNS (advertise `_buzzer._tcp.local`)
 - A deploy script that copies code to the RPi and starts the server
+- Auto-discovery so the game master doesn't need to know the RPi's IP
