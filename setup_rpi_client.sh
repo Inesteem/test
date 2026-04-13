@@ -89,12 +89,9 @@ scp -q start-quiz-client.sh QuizBuzzer.desktop "$RPI:buzzer/"
 # ── 4. Stop old processes ──
 
 echo ">> Stopping old processes..."
-ssh "$RPI" '
-    pkill -f team_client.py 2>/dev/null || true
-    pkill -f buzzer_server.py 2>/dev/null || true
-    pkill -f "chromium.*kiosk" 2>/dev/null || true
-    sleep 0.5
-'
+ssh "$RPI" 'test -f ~/buzzer/client.pid && kill "$(cat ~/buzzer/client.pid)" 2>/dev/null; true'
+ssh "$RPI" 'test -f ~/buzzer/buzzer.pid && kill "$(cat ~/buzzer/buzzer.pid)" 2>/dev/null; true'
+sleep 0.5
 
 # ── 5. Start services ──
 
@@ -102,9 +99,12 @@ echo ">> Starting buzzer server on :${RPI_BUZZER_PORT}..."
 ssh -f "$RPI" "cd ~/buzzer && ~/buzzer/venv/bin/python3 buzzer_server.py --host 0.0.0.0 --port $RPI_BUZZER_PORT > buzzer_server.log 2>&1 & echo \$! > buzzer.pid"
 sleep 1
 
-echo ">> Verifying buzzer server..."
-RESPONSE=$(curl -sf "http://${RPI_HOST}:${RPI_BUZZER_PORT}/") || { echo "   FAILED — buzzer server not reachable"; exit 1; }
-echo "   $RESPONSE"
+echo ">> Checking buzzer server..."
+if RESPONSE=$(curl -sf "http://${RPI_HOST}:${RPI_BUZZER_PORT}/"); then
+    echo "   $RESPONSE"
+else
+    echo "   Buzzer server not responding (no buzzers plugged in?). Continuing anyway."
+fi
 
 echo ">> Starting team client on :${RPI_CLIENT_PORT}..."
 ssh -f "$RPI" "cd ~/buzzer && ~/buzzer/venv/bin/python3 team_client.py --port ${RPI_CLIENT_PORT} > client.log 2>&1 & echo \$! > client.pid"
